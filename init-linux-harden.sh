@@ -1062,7 +1062,7 @@ if [[ $? -eq 0 ]]; then
     setup_step_start "${STEP_TEXT[6]}"
     {
         file_log "Setting ufw for ssh, http, https"
-        ufw allow ssh && ufw allow http && ufw allow https 
+        ufw allow 666/tcp && ufw allow http && ufw allow https 
         set_exit_code $?
 
         file_log "Enabling ufw"
@@ -1315,6 +1315,14 @@ setup_step_start "${STEP_TEXT[3]}"
     file_log "Removing root login -> PermitRootLogin no"
     set_config_key "/etc/ssh/sshd_config" "PermitRootLogin" "no"
     set_exit_code $?
+
+    # Change port 22 to 222
+    file_log "Change ssh port 22 to 666"
+    set_config_key "/etc/ssh/sshd_config" "Port" "666"
+    set_exit_code $?
+
+    # "$ a\UseDNS no" \
+    #  "$ a\AllowUsers $newuser"
 
     # Disable password login
     file_log "Disabling password login -> PasswordAuthentication no"
