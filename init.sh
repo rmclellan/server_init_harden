@@ -1134,7 +1134,7 @@ if [[ $(dpkg -l | grep -c fail2ban) -gt 0 ]]; then
         
         file_log "Enabling jails in /etc/fail2ban/jail.d/defaults-debian.conf"
 cat <<FAIL2BAN > /etc/fail2ban/jail.d/defaults-debian.conf
-[sshd]
+[sshd]0
 enabled = true
 maxretry = 3
 bantime = 2592000
