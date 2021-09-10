@@ -1320,7 +1320,10 @@ setup_step_start "${STEP_TEXT[3]}"
     file_log "Disabling password login -> PasswordAuthentication no"
     set_config_key "/etc/ssh/sshd_config" "PasswordAuthentication" "no"
     set_exit_code $?
-
+    # When removing a user make it remove Home folder of the user
+    #sed -i 's/REMOVE_HOME = 0/REMOVE_HOME = 1/g' /etc/deluser.conf
+    #set_exit_code $?
+    
     # Set SSH Authorization-Keys path
     file_log "Setting SSH Authorization-Keys path -> AuthorizedKeysFile '%h\/\.ssh\/authorized_keys'"
     set_config_key "/etc/ssh/sshd_config" "AuthorizedKeysFile" '\.ssh\/authorized_keys %h\/\.ssh\/authorized_keys'
