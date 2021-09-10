@@ -88,6 +88,7 @@ Script performs the following operations:-
    * Disable SSH login for *root* (PermitRootLogin no)
    * Disable SSH login through password for all users (PasswordAuthentication no) 
    * Updates path for *authoried_keys* file
+   * Remove user home on user removal (You need to comment out line 1324 and 1325)
 11. [On successfully completing above operations, display the following on screen:-](https://github.com/pratiktri/init-li-harden#11-display-summary "Goto details of the step")
     * Username
     * User Password
