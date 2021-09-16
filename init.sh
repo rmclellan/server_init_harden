@@ -772,11 +772,11 @@ function recap() {
     if [[ $HIDE_CREDENTIALS == "n" ]]; then
         line_fill "$CHORIZONTAL" "$CLINESIZE"
     fi
-    log_ops_finish "User Name" "$CreateNonRootUser" "$NORM_USER_NAME"
-    log_ops_finish "User's Password" "$CreateNonRootUser" "$USER_PASS"
-    log_ops_finish "SSH Private Key File" "$CreateSSHKey" "$SSH_DIR"/"$NORM_USER_NAME".pem
-    log_ops_finish "SSH Public Key File" "$CreateSSHKey" "$SSH_DIR"/"$NORM_USER_NAME".pem.pub
-    log_ops_finish "SSH Key Passphrase" "$CreateSSHKey" "$KEY_PASS"    
+    log_ops_finish "User Name" "$CreateNonRootUser" "$NORM_USER_NAME" < test.txt
+    log_ops_finish "User's Password" "$CreateNonRootUser" "$USER_PASS" < test.txt
+    log_ops_finish "SSH Private Key File" "$CreateSSHKey" "$SSH_DIR"/"$NORM_USER_NAME".pem < test.txt
+    log_ops_finish "SSH Public Key File" "$CreateSSHKey" "$SSH_DIR"/"$NORM_USER_NAME".pem.pub < test.txt
+    log_ops_finish "SSH Key Passphrase" "$CreateSSHKey" "$KEY_PASS" < test.txt    
     if [[ "$RESET_ROOT_PWD" == "y" && "$USER_CREATION_ALONE" == "n" ]]; then
         log_ops_finish "New root Password" "$ChangeRootPwd" "$PASS_ROOT"
     fi
