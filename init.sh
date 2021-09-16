@@ -1318,6 +1318,7 @@ setup_step_start "${STEP_TEXT[3]}"
 
     # Disable password login
     file_log "Disabling password login -> PasswordAuthentication no"
+    sed -i 's/#PasswordAuthentication = yes/PasswordAuthtentication = no/g' /etc/ssh/sshd_config
     set_config_key "/etc/ssh/sshd_config" "PasswordAuthentication" "no"
     set_exit_code $?
     # When removing a user make it remove Home folder of the user
