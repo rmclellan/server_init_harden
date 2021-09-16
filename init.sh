@@ -1,7 +1,6 @@
-#!/etc/bin/env bash
 #!/bin/bash
 SCRIPT_NAME=linux_init_harden
-SCRIPT_VERSION=1.0
+SCRIPT_VERSION=1.1
 
 LOGFILE=/tmp/"$SCRIPT_NAME"_v"$SCRIPT_VERSION".log
 # Reset previous log file
@@ -54,6 +53,7 @@ function usage() {
 # No root - no good
 [ "$(id -u)" != "0" ] && {
     usage "ERROR: You must be root to run this script.\\nPlease login as root and execute the script again."
+    usage "Run 'sudo su' - followed by your user password to access root."
     exit 1
 }
 
@@ -1318,7 +1318,7 @@ setup_step_start "${STEP_TEXT[3]}"
 
     # Disable password login
     file_log "Disabling password login -> PasswordAuthentication no"
-    sed -i 's/#PasswordAuthentication = yes/PasswordAuthtentication = no/g' /etc/ssh/sshd_config
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/g' /etc/ssh/sshd_config
     set_config_key "/etc/ssh/sshd_config" "PasswordAuthentication" "no"
     set_exit_code $?
     # When removing a user make it remove Home folder of the user
