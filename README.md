@@ -1,3 +1,8 @@
+This is a forked version of the original script by Pratikri. Describtion of what it does is below in a perfect formulated way. 
+My goal is to get it to upload the private and public keys to NFS drive so it can be accessed by the user. Ofcourse with a PASSPHRASE. 
+
+And will also use it to learn some more about it, so if any have a suggestion a warning or something please shoot. 
+
 # Linux Server Hardener
 Bash script that automates server security hardening on a new Linux server.
 
@@ -83,6 +88,7 @@ Script performs the following operations:-
    * Disable SSH login for *root* (PermitRootLogin no)
    * Disable SSH login through password for all users (PasswordAuthentication no) 
    * Updates path for *authoried_keys* file
+   * Remove user home on user removal (You need to comment out line 1324 and 1325)
 11. [On successfully completing above operations, display the following on screen:-](https://github.com/pratiktri/init-li-harden#11-display-summary "Goto details of the step")
     * Username
     * User Password
