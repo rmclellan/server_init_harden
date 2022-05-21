@@ -5,9 +5,9 @@ SCRIPT_VERSION=1.0
 
 LOGFILE=/tmp/"$SCRIPT_NAME"_v"$SCRIPT_VERSION".log
 # Reset previous log file
-TS=$(date '+%d_%m_%Y-%H_%M_%S')
+TS=$(date -u +'%FT%TUTC' | sed 's/://g')
 echo "Starting $0 - $TS" > "$LOGFILE"
-BACKUP_EXTENSION='.'$TS"_bak"
+BACKUP_EXTENSION='.'$TS".bak"
 
 # Colors
 CSI='\033['
@@ -15,15 +15,17 @@ CEND="${CSI}0m"
 CRED="${CSI}1;31m"
 CGREEN="${CSI}1;32m"
 
+# Hostname
+HOSTNAME=$(hostname)
 
 ##############################################################
 # Usage
 ##############################################################
 
 # Script takes arguments as follows
-# linux_init_harden -username pratik --resetrootpwd
-# linux_init_harden -u pratik --resetrootpwd
-# linux_init_harden -username pratik --resetrootpwd -q -hide
+# linux_init_harden -username myuser --resetrootpwd
+# linux_init_harden -u myuser --resetrootpwd
+# linux_init_harden -username myuser --resetrootpwd -q -hide
 
 function usage() {
     if [ -n "$1" ]; then
@@ -41,7 +43,7 @@ function usage() {
     echo "                                  NOTE: -r, -d would be ignored"
 
     echo ""
-    echo "Example: bash ./$SCRIPT_NAME.sh --username myuseraccount --resetrootpwd"
+    echo "Example: bash ./$SCRIPT_NAME.sh --username myuser --resetrootpwd"
     printf "\\nBelow restrictions apply to usernames - \\n"
     printf "%2s - [a-zA-Z0-9] [-] [_] are allowed\\n%2s - NO special characters.\\n%2s - NO spaces.\\n" " " " " " "
 }
@@ -80,6 +82,7 @@ if [ -f /etc/os-release ]; then
     OS=$ID
     VER=$VERSION_ID
     CODE_NAME=$VERSION_CODENAME
+    echo "OS identified as: $ID $VER $CODE_NAME"
 else
     os_not_supported
     exit 1
@@ -91,7 +94,7 @@ case "$OS" in
         # warn user and ask them to proceed with caution
         DEB_VER_STR=$CODE_NAME
         if ((VER >= 9 && VER <= 11)); then
-            new_os_version_warning
+            new_os_version_warning "${OS}" "${VER}"
         fi
         ;;
     ubuntu)
@@ -104,7 +107,8 @@ case "$OS" in
         ;;
     *)
         os_not_supported
-        exit 1
+        new_os_version_warning "${OS}" "${VER}"
+        # exit 1
         ;;
 esac
 
@@ -282,7 +286,7 @@ function line_fill() {
 ##############################################################
 
 function file_log(){
-    printf "%s - %s\\n" "$(date '+%d-%b-%Y %H:%M:%S')" "$1" >> "$LOGFILE"
+    printf "%s - %s\\n" "$(date -u +'%F %T UTC')" "$1" >> "$LOGFILE"
 }
 
 function log_step_status() {
@@ -771,8 +775,8 @@ function recap() {
     fi
     log_ops_finish "User Name" "$CreateNonRootUser" "$NORM_USER_NAME"
     log_ops_finish "User's Password" "$CreateNonRootUser" "$USER_PASS"
-    log_ops_finish "SSH Private Key File" "$CreateSSHKey" "$SSH_DIR"/"$NORM_USER_NAME".pem
-    log_ops_finish "SSH Public Key File" "$CreateSSHKey" "$SSH_DIR"/"$NORM_USER_NAME".pem.pub
+    log_ops_finish "SSH Private Key File" "$CreateSSHKey" "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem
+    log_ops_finish "SSH Public Key File" "$CreateSSHKey" "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem.pub
     log_ops_finish "SSH Key Passphrase" "$CreateSSHKey" "$KEY_PASS"    
     if [[ "$RESET_ROOT_PWD" == "y" && "$USER_CREATION_ALONE" == "n" ]]; then
         log_ops_finish "New root Password" "$ChangeRootPwd" "$PASS_ROOT"
@@ -781,8 +785,8 @@ function recap() {
         line_fill "$CHORIZONTAL" "$CLINESIZE"
     fi
 
-    log_ops_finish_file_contents "SSH Private Key" "$SSH_DIR"/"$NORM_USER_NAME".pem
-    log_ops_finish_file_contents "SSH Public Key" "$SSH_DIR"/"$NORM_USER_NAME".pem.pub
+    log_ops_finish_file_contents "SSH Private Key" "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem
+    log_ops_finish_file_contents "SSH Public Key" "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem.pub
     
     line_fill "$CHORIZONTAL" "$CLINESIZE"
     center_reg_text "!!! DO NOT LOG OUT JUST YET !!!"
@@ -842,8 +846,8 @@ setup_step_start "${STEP_TEXT[0]}"
         file_log "Generated user name ${NORM_USER_NAME}"
     fi
 
-    # Generate a 15 character random password
-    USER_PASS="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 15)" || exit 1
+    # Generate a 30 character random password
+    USER_PASS="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 30)" || exit 1
     file_log "Generated user password - ${USER_PASS}"
 
     # Create the user and assign the above password
@@ -880,12 +884,13 @@ setup_step_start "${STEP_TEXT[1]}"
     set_exit_code $?
 
     # Create a OpenSSH-compliant ed25519-type key
-    file_log "Generating SSH Key File - $SSH_DIR/$NORM_USER_NAME.pem"
-    ssh-keygen -a 1000 -o -t ed25519 -N "$KEY_PASS" -C "$NORM_USER_NAME" -f "$SSH_DIR"/"$NORM_USER_NAME".pem -q
+    KEYALGO="ed25519"
+    file_log "Generating SSH Key File - $HOSTNAME\_$NORM_USER_NAME\_$KEYALGO.pem"
+    ssh-keygen -a 1000 -o -t ed25519 -N "$KEY_PASS" -C "$NORM_USER_NAME @ $HOSTNAME -- Generated $(date -u +'%F %T UTC')" -f "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem -q
     set_exit_code $?
 
     # Copy the generated public file to authorized_keys
-    cat "$SSH_DIR"/"$NORM_USER_NAME".pem.pub >> "$SSH_DIR"/authorized_keys
+    cat "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem.pub >> "$SSH_DIR"/authorized_keys
     set_exit_code $?
 } 2>> "$LOGFILE" >&2
 
@@ -913,7 +918,7 @@ setup_step_start "${STEP_TEXT[2]}"
 
     # Restrict access to the generated SSH Key files as well
     shopt -s nullglob
-    KEY_FILES=("$SSH_DIR"/"$NORM_USER_NAME".pem*)
+    KEY_FILES=("$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem*)
     for key in "${KEY_FILES[@]}"; do
         file_log "Restricting access (chmod 400 and chattr +i) to ${key} file"
         chmod 400 "$key" && \
@@ -1202,9 +1207,9 @@ fi
 if [[ $RESET_ROOT_PWD == 'y' ]]; then
     setup_step_start "${STEP_TEXT[8]}"
     {
-        # Generate a 15 character random password
+        # Generate a 30 character random password
         file_log "Generating roots new password..."
-        PASS_ROOT="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 15)"
+        PASS_ROOT="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 30)"
         set_exit_code $?
 
         file_log "Generated root Password - ${PASS_ROOT}"
