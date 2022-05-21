@@ -775,8 +775,8 @@ function recap() {
     fi
     log_ops_finish "User Name" "$CreateNonRootUser" "$NORM_USER_NAME"
     log_ops_finish "User's Password" "$CreateNonRootUser" "$USER_PASS"
-    log_ops_finish "SSH Private Key File" "$CreateSSHKey" "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem
-    log_ops_finish "SSH Public Key File" "$CreateSSHKey" "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem.pub
+    log_ops_finish "SSH Private Key File" "$CreateSSHKey" "$SSH_DIR"/"$KEYFILENAME"
+    log_ops_finish "SSH Public Key File" "$CreateSSHKey" "$SSH_DIR"/"$KEYFILENAME".pub
     log_ops_finish "SSH Key Passphrase" "$CreateSSHKey" "$KEY_PASS"    
     if [[ "$RESET_ROOT_PWD" == "y" && "$USER_CREATION_ALONE" == "n" ]]; then
         log_ops_finish "New root Password" "$ChangeRootPwd" "$PASS_ROOT"
@@ -785,8 +785,8 @@ function recap() {
         line_fill "$CHORIZONTAL" "$CLINESIZE"
     fi
 
-    log_ops_finish_file_contents "SSH Private Key" "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem
-    log_ops_finish_file_contents "SSH Public Key" "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem.pub
+    log_ops_finish_file_contents "SSH Private Key" "$SSH_DIR"/"$KEYFILENAME"
+    log_ops_finish_file_contents "SSH Public Key" "$SSH_DIR"/"$KEYFILENAME".pub
     
     line_fill "$CHORIZONTAL" "$CLINESIZE"
     center_reg_text "!!! DO NOT LOG OUT JUST YET !!!"
@@ -885,12 +885,13 @@ setup_step_start "${STEP_TEXT[1]}"
 
     # Create a OpenSSH-compliant ed25519-type key
     KEYALGO="ed25519"
-    file_log "Generating SSH Key File - $HOSTNAME\_$NORM_USER_NAME\_$KEYALGO.pem"
-    ssh-keygen -a 1000 -o -t ed25519 -N "$KEY_PASS" -C "$NORM_USER_NAME @ $HOSTNAME -- Generated $(date -u +'%F %T UTC')" -f "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem -q
+    KEYFILENAME="$HOSTNAME"_"$NORM_USER_NAME"_"$KEYALGO".pem
+    file_log "Generating SSH Key File - $KEYFILENAME"
+    ssh-keygen -a 1000 -o -t ed25519 -N "$KEY_PASS" -C "$NORM_USER_NAME @ $HOSTNAME -- Generated $(date -u +'%F %T UTC')" -f "$SSH_DIR"/"$KEYFILENAME" -q
     set_exit_code $?
 
     # Copy the generated public file to authorized_keys
-    cat "$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem.pub >> "$SSH_DIR"/authorized_keys
+    cat "$SSH_DIR"/"$KEYFILENAME".pub >> "$SSH_DIR"/authorized_keys
     set_exit_code $?
 } 2>> "$LOGFILE" >&2
 
@@ -918,7 +919,7 @@ setup_step_start "${STEP_TEXT[2]}"
 
     # Restrict access to the generated SSH Key files as well
     shopt -s nullglob
-    KEY_FILES=("$SSH_DIR"/"$HOSTNAME\_$NORM_USER_NAME\_$KEYALGO".pem*)
+    KEY_FILES=("$SSH_DIR"/"$KEYFILENAME"*)
     for key in "${KEY_FILES[@]}"; do
         file_log "Restricting access (chmod 400 and chattr +i) to ${key} file"
         chmod 400 "$key" && \

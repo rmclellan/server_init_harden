@@ -1,10 +1,6 @@
 # Linux Server Hardener
 Bash script that automates server security hardening on a new Linux server.
 
-I wanted to change my VPS(Virtual Private Server) provider and was testing out many providers and many Linux flavours on those VPSes. But before doing anything those servers needed to be given basic amount security and this involved a set of repetitive commands on terminal. Depending on network speed and number of mis-types, these took between 30-90 minutes to perform. 
-
-This script is meant to save that time.
-
 ## *** __WARNING__ ***
 This script can potentially make your server inaccessible. 
 
