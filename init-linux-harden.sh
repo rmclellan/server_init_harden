@@ -874,9 +874,11 @@ fi
 setup_step_start "${STEP_TEXT[1]}"
 {
     SSH_DIR=/home/"$NORM_USER_NAME"/.ssh
-    file_log "Creating SSH directory - $SSH_DIR"
-    mkdir "$SSH_DIR"
-    set_exit_code $?
+    if ![[ -d $SSH_DIR ]]; then
+        file_log "Creating SSH directory - $SSH_DIR"
+        mkdir "$SSH_DIR"
+        set_exit_code $?
+    fi
 
     # Generate a 15 character random password for key
     KEY_PASS="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 15)"
@@ -902,42 +904,42 @@ if [[ $exit_code -gt 0 ]]; then
 fi
 
 
-##############################################################
-# Step 3 - Secure authorized_keys file
-##############################################################
+# ##############################################################
+# # Step 3 - Secure authorized_keys file
+# ##############################################################
 
-setup_step_start "${STEP_TEXT[2]}"
-{
-    # Set appropriate permissions for ".ssh" dir and "authorized_key" file
-    file_log "Setting appropriate permissions for $SSH_DIR dir and $SSH_DIR/authorized_keys file"
-    chown -R "$NORM_USER_NAME" "$SSH_DIR" && \
-        chgrp -R "$NORM_USER_NAME" "$SSH_DIR" && \
-        chmod 700 "$SSH_DIR" && \
-        chmod 400 "$SSH_DIR"/authorized_keys && \
-        chattr +i "$SSH_DIR"/authorized_keys
-    set_exit_code $?
+# setup_step_start "${STEP_TEXT[2]}"
+# {
+#     # Set appropriate permissions for ".ssh" dir and "authorized_key" file
+#     file_log "Setting appropriate permissions for $SSH_DIR dir and $SSH_DIR/authorized_keys file"
+#     chown -R "$NORM_USER_NAME" "$SSH_DIR" && \
+#         chgrp -R "$NORM_USER_NAME" "$SSH_DIR" && \
+#         chmod 700 "$SSH_DIR" && \
+#         chmod 400 "$SSH_DIR"/authorized_keys && \
+#         chattr +i "$SSH_DIR"/authorized_keys
+#     set_exit_code $?
 
-    # Restrict access to the generated SSH Key files as well
-    shopt -s nullglob
-    KEY_FILES=("$SSH_DIR"/"$KEYFILENAME"*)
-    for key in "${KEY_FILES[@]}"; do
-        file_log "Restricting access (chmod 400 and chattr +i) to ${key} file"
-        chmod 400 "$key" && \
-            chattr +i "$key"
-        set_exit_code $?
-    done
-} 2>> "$LOGFILE" >&2
+#     # Restrict access to the generated SSH Key files as well
+#     shopt -s nullglob
+#     KEY_FILES=("$SSH_DIR"/"$KEYFILENAME"*)
+#     for key in "${KEY_FILES[@]}"; do
+#         file_log "Restricting access (chmod 400 and chattr +i) to ${key} file"
+#         chmod 400 "$key" && \
+#             chattr +i "$key"
+#         set_exit_code $?
+#     done
+# } 2>> "$LOGFILE" >&2
 
-setup_step_end "${STEP_TEXT[2]}"
-if [[ $exit_code -gt 0 ]]; then
-    file_log "Setting restrictive permissions for '~/.ssh/' directory failed"
-    file_log "Please do 'ls -lAh ~/.ssh/' and check manually to see what went wrong."
-    revert_everything_and_exit "${STEP_TEXT[2]}"
-fi
+# setup_step_end "${STEP_TEXT[2]}"
+# if [[ $exit_code -gt 0 ]]; then
+#     file_log "Setting restrictive permissions for '~/.ssh/' directory failed"
+#     file_log "Please do 'ls -lAh ~/.ssh/' and check manually to see what went wrong."
+#     revert_everything_and_exit "${STEP_TEXT[2]}"
+# fi
 
-if [[ "$USER_CREATION_ALONE" == "y" ]]; then
-    recap
-fi
+# if [[ "$USER_CREATION_ALONE" == "y" ]]; then
+#     recap
+# fi
 
 
 ##############################################################

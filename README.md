@@ -82,7 +82,7 @@ Script performs the following operations:-
 
 1. [Create non-root user and give it "sudo" privilege](https://github.com/mikeo85/init-li-harden#1-create-non-root-user-and-give-it-sudo-privilege "Goto details of the step")
 2. [Generate passphrage protected *ed25519* SSH Keys](https://github.com/mikeo85/init-li-harden#2-generate-passphrage-protected-ed25519-ssh-keys-private--public "Goto details of the step")
-3. [Secure "authorized_keys" file](https://github.com/mikeo85/init-li-harden#3-secure-authorized_keys-file "Goto details of the step")
+3. ~~[Secure "authorized_keys" file](https://github.com/mikeo85/init-li-harden#3-secure-authorized_keys-file "Goto details of the step")~~
 4. [[Optionally] Reset the url for apt repo from VPS provided CDN to OS provided ones](https://github.com/mikeo85/init-li-harden#4-optionally-reset-the-url--for-apt-repo-from-vps-provided-cdn-to-os-provided-ones "Goto details of the step")
 5. [Update + Upgrade + Install softwares (sudo curl screen ufw fail2ban)](https://github.com/mikeo85/init-li-harden#5-updates--upgrades--installs-required-softwares-sudo--screen-ufw-fail2ban "Goto details of the step")
 6. [Configure UFW](https://github.com/mikeo85/init-li-harden#6-configure-ufw "Goto details of the step")
@@ -197,15 +197,15 @@ SSH Public Key is then *appended* to /home/*__[username]__*/.ssh/authorized_keys
 
 
 
-### 3. Secure "authorized_keys" file
+<!-- ### 3. Secure "authorized_keys" file
 "authorized_keys" file present in user's .ssh sub-directory contains the Public Key values. These Public Key values are used to authenticate user logins. Since, this is an important file we need to secure it tight. 
 
 Following are the file access restrictions that the script applies:-
 * Make *root* user the owner of /home/*__[username]__*/.ssh/ directory and all files inside it.
 * Give *root* group access to /home/*__[username]__*/.ssh/ directory and all files inside it.
 * Make the /home/*__[username]__*/.ssh/ directory and all files inside it visible only to the *root* user.
-* Remove the editing rights on /home/*__[username]__*/.ssh/authorized_keys file from every user - including *root*.
-* Make the /home/*__[username]__*/.ssh/authorized_keys file immutable.
+* Remove the editing rights on /home/*__[username]__*/.ssh/authorized_keys file from every user - including *root*. -->
+<!-- * Make the /home/*__[username]__*/.ssh/authorized_keys file immutable. -->
 
 #### Error Handling
 
