@@ -35,20 +35,20 @@ The script is intended to be executed immediately after you have access to a *__
 
 Download the script
 ```console
-wget -q https://raw.githubusercontent.com/mikeo85/server_init_harden/master/init-linux-harden.sh -O init-linux-harden.sh
+wget -q https://raw.githubusercontent.com/mikeo85/server_init_harden/master/linux-init-harden.sh -O linux-init-harden.sh
 ```
-Execute the script using the basic formula `bash ./init-linux-harden.sh [arguments]`. For example:
+Execute the script using the basic formula `bash ./linux-init-harden.sh [arguments]`. For example:
 - Update default source list to debian.org, use quiet output, hide credentials (only write to log file, not console)
 ```console
-bash ./init-linux-harden.sh -d -q -hide
+bash ./linux-init-harden.sh -d -q -hide
 ```
 - Same as above, but with full options names
 ```console
-bash ./init-linux-harden.sh --defaultsourcelist --quiet --hide-credentials
+bash ./linux-init-harden.sh --defaultsourcelist --quiet --hide-credentials
 ```
 - Give new username & reset the root password
 ```console
-bash ./init-linux-harden.sh -u myCoolUsername --resetrootpwd
+bash ./linux-init-harden.sh -u myCoolUsername --resetrootpwd
 ```
 
 > There are inherent risks involved with running scripts directly (without reviewing it first) from web - as done above. Everyone does it anyways, but you have been warned. 
@@ -434,9 +434,9 @@ Ans - User belongs to "sudo" group => Yes
 
 Run the script with "sudo" privileges:-
 ```console
-root@host:~# wget -q https://raw.githubusercontent.com/mikeo85/server_init_harden/master/init-linux-harden.sh -O init-linux-harden.sh && sudo bash ./init-linux-harden.sh --username someusername --resetrootpwd --defaultsourcelist --quiet --hide-credentials
+root@host:~# wget -q https://raw.githubusercontent.com/mikeo85/server_init_harden/master/linux-init-harden.sh -O linux-init-harden.sh && sudo bash ./linux-init-harden.sh --username someusername --resetrootpwd --defaultsourcelist --quiet --hide-credentials
 
-root@host:~# wget -q https://raw.githubusercontent.com/mikeo85/server_init_harden/master/init-linux-harden.sh -O init-linux-harden.sh && sudo bash ./init-linux-harden.sh -u someusername -r -d -q -hide
+root@host:~# wget -q https://raw.githubusercontent.com/mikeo85/server_init_harden/master/linux-init-harden.sh -O linux-init-harden.sh && sudo bash ./linux-init-harden.sh -u someusername -r -d -q -hide
 ```
 
 ## Todo
