@@ -1,26 +1,27 @@
 #!/bin/bash
+############################################################
+#
+#  LINUX SERVER INITIALIZE AND HARDEN
+#  ---------------------------------------------------------
+#  Bash script that automates initial setup and hardening
+#  of a new linux server.
+#
+#        Written by: Mike Owens
+#        Email:      mikeowens (at) fastmail (dot) com
+#        Website:    https://michaelowens.me
+#        GitLab:     https://gitlab.com/mikeo85
+#        GitHub:     https://github.com/mikeo85
+#        Twitter:    https://twitter.com/quietmike8192
+#
+#  Based on original work by Pratik Kumar Tripathy
+#   (https://github.com/pratiktri/server_init_harden)
+#   with various modifications and additions.
+#  
+############################################################
 
-SCRIPT_NAME=linux_init_harden
-SCRIPT_VERSION=1.0
-
-LOGFILE=/tmp/"$SCRIPT_NAME"_v"$SCRIPT_VERSION".log
-# Reset previous log file
-TS=$(date -u +'%FT%TUTC' | sed 's/://g')
-echo "Starting $0 - $TS" > "$LOGFILE"
-BACKUP_EXTENSION='.'$TS".bak"
-
-# Colors
-CSI='\033['
-CEND="${CSI}0m"
-CRED="${CSI}1;31m"
-CGREEN="${CSI}1;32m"
-
-# Hostname
-HOSTNAME=$(hostname)
-
-##############################################################
+############################################################
 # Usage
-##############################################################
+############################################################
 
 # Script takes arguments as follows
 # linux_init_harden -username myuser --resetrootpwd
@@ -50,6 +51,31 @@ function usage() {
 
 
 ##############################################################
+# Initialize variables
+##############################################################
+
+SCRIPT_NAME=linux_init_harden
+SCRIPT_VERSION=1.0
+
+LOGFILE=/tmp/"$SCRIPT_NAME"_v"$SCRIPT_VERSION".log
+# Reset previous log file
+TS=$(date -u +'%FT%TUTC' | sed 's/://g')
+echo "Starting $0 - $TS" > "$LOGFILE"
+BACKUP_EXTENSION='.'$TS".bak"
+
+# Colors
+CSI='\033['
+CEND="${CSI}0m"
+CRED="${CSI}1;31m"
+CGREEN="${CSI}1;32m"
+
+# Hostname
+HOSTNAME=$(hostname)
+
+# Supported OSes
+supported_os=("debian 9" "debian 10" "debian 11" "pop 22.04" "ubuntu 16.04")
+
+##############################################################
 # Basic checks before starting
 ##############################################################
 
@@ -60,8 +86,8 @@ function usage() {
 }
 
 function os_not_supported() {
-    printf "This script only supports: \\n\\tDebian 9, 10, and 11\\n"
-    printf "\\tUbuntu 16.04, 18.04, 18.10, 20.04, and 21.04\\n"
+    printf "This script only supports the following operating systems:\\n"
+    printf "\\t$(echo ${supported_os[@]})\\n"
     printf "Your OS is NOT supported.\\n"
 }
 
@@ -83,34 +109,23 @@ if [ -f /etc/os-release ]; then
     VER=$VERSION_ID
     CODE_NAME=$VERSION_CODENAME
     echo "OS identified as: $ID $VER $CODE_NAME"
+    OS_OK=0
+    for o in "${supported_os[@]}"; do
+        echo "$OS $VER ==? $o"
+        if [[ "$OS $VER" = "$o" ]]; then
+            OS_OK=1
+            break
+        fi
+    done
+    if [[ $OS_OK -eq 0 ]]; then 
+        os_not_supported
+        new_os_version_warning "${OS}" "${VER}"
+        echo "os not supported"
+    fi
 else
     os_not_supported
     exit 1
 fi
-
-case "$OS" in
-    debian)
-        # If the versions are not 9, 10, 11
-        # warn user and ask them to proceed with caution
-        DEB_VER_STR=$CODE_NAME
-        if ((VER >= 9 && VER <= 11)); then
-            new_os_version_warning "${OS}" "${VER}"
-        fi
-        ;;
-    ubuntu)
-        # If the versions are not 16.04, 18.04, 18.10, 20.04. 21.04
-        # warn user and ask them to proceed with caution
-        UBT_VER_STR=$CODE_NAME
-        if [[ "$VER" != "16.04" ]] && [[ "$VER" != "18.04" ]] && [[ "$VER" != "18.10" ]] && [[ "$VER" != "20.04" ]] && [[ "$VER" != "21.04" ]]; then
-            new_os_version_warning "${OS}" "${VER}"
-        fi
-        ;;
-    *)
-        os_not_supported
-        new_os_version_warning "${OS}" "${VER}"
-        # exit 1
-        ;;
-esac
 
 ##################################
 # Parse script arguments
@@ -247,7 +262,7 @@ SECONDS=0
 
 CVERTICAL="|"
 CHORIZONTAL="_"
-CLINESIZE=72
+CLINESIZE=80
 
 function center_text(){
   textsize=${#1}
@@ -332,7 +347,7 @@ function log_ops_finish (){
 
     if [[ $HIDE_CREDENTIALS == "n" ]]; then
         horizontal_fill "$CVERTICAL" 1
-        printf "%23s:%3s%-54s" "$purpose" " " "$(echo -e "$value")"
+        printf "%23s:%3s%-62s" "$purpose" " " "$(echo -e "$value")"
         line_fill "$CVERTICAL" 1
     fi    
 }
@@ -785,12 +800,13 @@ function recap() {
         line_fill "$CHORIZONTAL" "$CLINESIZE"
     fi
 
-    log_ops_finish_file_contents "SSH Private Key" "$SSH_DIR"/"$KEYFILENAME"
-    log_ops_finish_file_contents "SSH Public Key" "$SSH_DIR"/"$KEYFILENAME".pub
+    # log_ops_finish_file_contents "SSH Private Key" "$SSH_DIR"/"$KEYFILENAME"
+    # log_ops_finish_file_contents "SSH Public Key" "$SSH_DIR"/"$KEYFILENAME".pub
     
     line_fill "$CHORIZONTAL" "$CLINESIZE"
     center_reg_text "!!! DO NOT LOG OUT JUST YET !!!"
-    center_reg_text "Use another window to test out the above credentials"
+    # center_reg_text "Use another window to test out the above credentials"
+    center_reg_text "Use another window to validate that you can log in using your SSH key"
     center_reg_text "If you face issue logging in, check the log file to see what went wrong"
     center_reg_text "Log file at ${LOGFILE}"
 
@@ -941,6 +957,14 @@ fi
 #     recap
 # fi
 
+# ##############################################################
+# # Step 3 ALT - Add your Public Key
+# ##############################################################
+
+# read -p "Enter your public key: " getkey
+# echo $getkey >> "$SSH_DIR/authorized_keys"
+# cat "$SSH_DIR/authorized_keys"
+# exit 1
 
 ##############################################################
 # Step 4 - Change default source-list
@@ -1234,123 +1258,150 @@ fi
 # Step 10 - Enable SSH-only login
 ##############################################################
 
-# TODO - Make this cleaner
-function config_search_regex(){
-    local search_key=$1
-    declare -i isCommented=$2
-    local value=$3
+## STEP 10.1 -- FIRST PROMPT USER TO LOAD THEIR SSH KEY AND VALIDATE ACCESS
+my_ip=$(ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
+my_public_ip=$(curl https://ipinfo.io/ip 2>> /dev/null) 
 
-    if [[ "$isCommented" -eq 1 ]] && [[ ! "$value" ]]; then
-        # Search Regex for an uncommented (active) field
-        echo '(^ *)'"$search_key"'( *).*([[:word:]]+)( *)$'
-    elif [[ "$isCommented" -eq 2 ]] && [[ ! "$value" ]]; then
-        # Search Regex for a commented out field
-        echo '(^ *)#.*'"$search_key"'( *).*([[:word:]]+)( *)$'
+echo ""
+echo ""
+echo "Before disabling SSH password login, add your public key to this machine to maintain remote access. Do this using the ssh-copy-id command. "
+echo "IP address to use may vary depending on your networking situation. The network IP of this machine is $my_ip. The Internet IP of this machine is $my_public_ip."
+echo ""
+echo "Example (network):  ssh-copy-id -i /path/to/keyfile -o PubkeyAuthentication=no "$NORM_USER_NAME"@$my_ip"
+echo "Example (internet): ssh-copy-id -i /path/to/keyfile -o PubkeyAuthentication=no "$NORM_USER_NAME"@$my_public_ip"
+echo ""
+echo "Password for user $NORM_USER_NAME: $USER_PASS"
+echo ""
+echo "ADD YOUR SSH KEY AT THIS TIME"
+read -p "Was your SSH key added successfully? (Y/N): " key_confirm
+echo ""
+if [[ $key_confirm == [yY] || $key_confirm == [yY][eE][sS] ]]; then
+    echo "Disabling SSH password login..."
+    echo ""
+    
+    ## STEP 10.2 -- DISABLE SSH PASSWORD LOGIN
 
-    elif [[ "$isCommented" -eq 1 ]] && [[ "$value" ]]; then
-        # Search Regex for an active field with specified value
-        echo '(^ *)'"$search_key"'( *)('"$value"')( *)$'
-    elif [[ "$isCommented" -eq 2 ]] && [[ "$value" ]]; then
-        # Search Regex for an commented (inactive) field with specified value
-        echo '(^ *)#.*'"$search_key"'( *)('"$value"')( *)$'
+    # TODO - Make this cleaner
+    function config_search_regex(){
+        local search_key=$1
+        declare -i isCommented=$2
+        local value=$3
 
-    else
-        exit 1    
-    fi
-}
+        if [[ "$isCommented" -eq 1 ]] && [[ ! "$value" ]]; then
+            # Search Regex for an uncommented (active) field
+            echo '(^ *)'"$search_key"'( *).*([[:word:]]+)( *)$'
+        elif [[ "$isCommented" -eq 2 ]] && [[ ! "$value" ]]; then
+            # Search Regex for a commented out field
+            echo '(^ *)#.*'"$search_key"'( *).*([[:word:]]+)( *)$'
 
-function set_config_key(){
-    local file_location=$1
-    local key=$2
-    local value=$3
+        elif [[ "$isCommented" -eq 1 ]] && [[ "$value" ]]; then
+            # Search Regex for an active field with specified value
+            echo '(^ *)'"$search_key"'( *)('"$value"')( *)$'
+        elif [[ "$isCommented" -eq 2 ]] && [[ "$value" ]]; then
+            # Search Regex for an commented (inactive) field with specified value
+            echo '(^ *)#.*'"$search_key"'( *)('"$value"')( *)$'
 
-    ACTIVE_KEYS_REGEX=$(config_search_regex "$key" "1")
-    ACTIVE_CORRECT_KEYS_REGEX=$(config_search_regex "$key" "1" "$value")
-    INACTIVE_KEYS_REGEX=$(config_search_regex "$key" "2")
-
-    # If no keys present - insert the correct configuration to the end of the file
-    if [[ $(grep -Pnc "$INACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]] && [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]];
-    then
-        echo "$key" "$value" >> "$file_location"
-    fi
-
-    # If Config file already has correct configuration
-    # Keep only the LAST correct one and comment out the rest
-    if [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -gt 0 ]]; 
-    then
-        # Last correct active entry's line number
-        LAST_CORRECT_LINE=$(grep -Pn "$ACTIVE_CORRECT_KEYS_REGEX" "$file_location" | tail -1 | cut -d: -f 1)
-
-        # Loop through each of the active lines
-        grep -Pn "$ACTIVE_KEYS_REGEX" "$file_location" | while read -r i; 
-        do
-            # Get the line number
-            LINE_NUMBER=$(echo "$i" | cut -d: -f 1 )
-
-            # If this is the last correct entry - break
-            if [[ $LAST_CORRECT_LINE -ne 0 ]] && [[ $LINE_NUMBER == "$LAST_CORRECT_LINE" ]]; then
-                break
-            fi
-
-            # Comment out the line
-            sed -i "$LINE_NUMBER"'s/.*/#&/' "$file_location"
-        done
-    fi
-
-    # If Config file has commented configuration and NO active configuration 
-    # Append the appropriate configuration below the LAST commented configuration
-    if [[ $(grep -Pnc "$INACTIVE_KEYS_REGEX" "$file_location") -gt 0 ]] && [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]]; 
-    then
-        # Get the line number of - last commented configuration
-        LINE_NUMBER=$(grep -Pn "$INACTIVE_KEYS_REGEX" "$file_location" | tail -1 | cut -d: -f 1)
-
-        (( LINE_NUMBER++ ))
-
-        # Insert the correct setting below the last commented configuration
-        sed -i "$LINE_NUMBER"'i'"$key"' '"$value" "$file_location"
-    fi
-}
-
-setup_step_start "${STEP_TEXT[3]}"
-{
-    # Backup the sshd_config file
-    file_log "Backing up /etc/ssh/sshd_config file to /etc/ssh/sshd_config$BACKUP_EXTENSION"
-    cp /etc/ssh/sshd_config /etc/ssh/sshd_config"$BACKUP_EXTENSION"
-    set_exit_code $?
-
-    # Remove root login
-    file_log "Removing root login -> PermitRootLogin no"
-    set_config_key "/etc/ssh/sshd_config" "PermitRootLogin" "no"
-    set_exit_code $?
-
-    # Disable password login
-    file_log "Disabling password login -> PasswordAuthentication no"
-    set_config_key "/etc/ssh/sshd_config" "PasswordAuthentication" "no"
-    set_exit_code $?
-
-    # Set SSH Authorization-Keys path
-    file_log "Setting SSH Authorization-Keys path -> AuthorizedKeysFile '%h\/\.ssh\/authorized_keys'"
-    set_config_key "/etc/ssh/sshd_config" "AuthorizedKeysFile" '\.ssh\/authorized_keys %h\/\.ssh\/authorized_keys'
-    set_exit_code $?
-
-    file_log "Restarting ssh service..."
-    { 
-        set_exit_code $(service_action_and_chk_error "sshd" "restart")
-        if [[ $exit_code -eq 0 ]]; then
-            false
+        else
+            exit 1    
         fi
-        } || { 
-                # Because Ubuntu 14.04 does not have sshd
-                set_exit_code $(service_action_and_chk_error "ssh" "restart")
-            }
-} 2>> "$LOGFILE" >&2
+    }
+
+    function set_config_key(){
+        local file_location=$1
+        local key=$2
+        local value=$3
+
+        ACTIVE_KEYS_REGEX=$(config_search_regex "$key" "1")
+        ACTIVE_CORRECT_KEYS_REGEX=$(config_search_regex "$key" "1" "$value")
+        INACTIVE_KEYS_REGEX=$(config_search_regex "$key" "2")
+
+        # If no keys present - insert the correct configuration to the end of the file
+        if [[ $(grep -Pnc "$INACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]] && [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]];
+        then
+            echo "$key" "$value" >> "$file_location"
+        fi
+
+        # If Config file already has correct configuration
+        # Keep only the LAST correct one and comment out the rest
+        if [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -gt 0 ]]; 
+        then
+            # Last correct active entry's line number
+            LAST_CORRECT_LINE=$(grep -Pn "$ACTIVE_CORRECT_KEYS_REGEX" "$file_location" | tail -1 | cut -d: -f 1)
+
+            # Loop through each of the active lines
+            grep -Pn "$ACTIVE_KEYS_REGEX" "$file_location" | while read -r i; 
+            do
+                # Get the line number
+                LINE_NUMBER=$(echo "$i" | cut -d: -f 1 )
+
+                # If this is the last correct entry - break
+                if [[ $LAST_CORRECT_LINE -ne 0 ]] && [[ $LINE_NUMBER == "$LAST_CORRECT_LINE" ]]; then
+                    break
+                fi
+
+                # Comment out the line
+                sed -i "$LINE_NUMBER"'s/.*/#&/' "$file_location"
+            done
+        fi
+
+        # If Config file has commented configuration and NO active configuration 
+        # Append the appropriate configuration below the LAST commented configuration
+        if [[ $(grep -Pnc "$INACTIVE_KEYS_REGEX" "$file_location") -gt 0 ]] && [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]]; 
+        then
+            # Get the line number of - last commented configuration
+            LINE_NUMBER=$(grep -Pn "$INACTIVE_KEYS_REGEX" "$file_location" | tail -1 | cut -d: -f 1)
+
+            (( LINE_NUMBER++ ))
+
+            # Insert the correct setting below the last commented configuration
+            sed -i "$LINE_NUMBER"'i'"$key"' '"$value" "$file_location"
+        fi
+    }
+
+    setup_step_start "${STEP_TEXT[3]}"
+    {
+        # Backup the sshd_config file
+        file_log "Backing up /etc/ssh/sshd_config file to /etc/ssh/sshd_config$BACKUP_EXTENSION"
+        cp /etc/ssh/sshd_config /etc/ssh/sshd_config"$BACKUP_EXTENSION"
+        set_exit_code $?
+
+        # Remove root login
+        file_log "Removing root login -> PermitRootLogin no"
+        set_config_key "/etc/ssh/sshd_config" "PermitRootLogin" "no"
+        set_exit_code $?
+
+        # Disable password login
+        file_log "Disabling password login -> PasswordAuthentication no"
+        set_config_key "/etc/ssh/sshd_config" "PasswordAuthentication" "no"
+        set_exit_code $?
+
+        # Set SSH Authorization-Keys path
+        file_log "Setting SSH Authorization-Keys path -> AuthorizedKeysFile '%h\/\.ssh\/authorized_keys'"
+        set_config_key "/etc/ssh/sshd_config" "AuthorizedKeysFile" '\.ssh\/authorized_keys %h\/\.ssh\/authorized_keys'
+        set_exit_code $?
+
+        file_log "Restarting ssh service..."
+        { 
+            set_exit_code $(service_action_and_chk_error "sshd" "restart")
+            if [[ $exit_code -eq 0 ]]; then
+                false
+            fi
+            } || { 
+                    # Because Ubuntu 14.04 does not have sshd
+                    set_exit_code $(service_action_and_chk_error "ssh" "restart")
+                }
+    } 2>> "$LOGFILE" >&2
+
+else
+    echo "Password login will not be disabled at this time."
+    set_exit_code 0
+fi
 
 setup_step_end "${STEP_TEXT[3]}"
 if [[ $exit_code -gt 0 ]]; then
     file_log "Enabling SSH-only login failed."
     revert_everything_and_exit "${STEP_TEXT[3]}"
 fi
-
 
 ##############################################################
 # Recap
