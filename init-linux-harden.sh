@@ -68,10 +68,24 @@ function new_os_version_warning(){
   read -p "Continue (NOT RECOMMENDED)? (Y/N): " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]] || exit 1
 }
 
+function sudo_users_detected(){
+  echo -e "Please note that the following sudo users are already detected on the system:\n${1}\nThis is probably not a fresh install.\n"
+  read -p "Continue (NOT RECOMMENDED)? (Y/N): " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]] || exit 1
+}
+
 # Fail-fast: No apt - no good
 if ! command -v apt-get >/dev/null; then
     os_not_supported
     exit 1
+fi
+
+# Check for sudo users
+SUDOTEST="$(egrep '^sudo:.*$' /etc/group | cut -d: -f4)"
+if echo $SUDOTEST >/dev/null; then
+   sudo_users_detected "${SUDOTEST}"
+   exit 1
+else
+    echo "No Super Users Detected.  Proceeding."
 fi
 
 # Check supported OSes
@@ -98,7 +112,7 @@ case "$OS" in
         # If the versions are not 16.04, 18.04, 18.10, 20.04. 22.04
         # warn user and ask them to proceed with caution
         UBT_VER_STR=$CODE_NAME
-        if [[ "$VER" != "16.04" ]] && [[ "$VER" != "18.04" ]] && [[ "$VER" != "18.10" ]] && [[ "$VER" != "20.04" ]] && [[ "$VER" != "22.04" ]]; then
+        if [[ "$VER" != "16.04" ]] && [[ "$VER" != "18.04" ]] && [[ "$VER" != "18.10" ]] && [[ "$VER" != "20.04" ]] && [[ "$VER" != "21.04" ]]; then
             new_os_version_warning "${OS}" "${VER}"
         fi
         ;;
