@@ -59,7 +59,7 @@ function usage() {
 
 function os_not_supported() {
     printf "This script only supports: \\n\\tDebian 9, 10, and 11\\n"
-    printf "\\tUbuntu 16.04, 18.04, 18.10, 20.04, and 21.04\\n"
+    printf "\\tUbuntu 16.04, 18.04, 18.10, 20.04, and 22.04\\n"
     printf "Your OS is NOT supported.\\n"
 }
 
@@ -95,10 +95,10 @@ case "$OS" in
         fi
         ;;
     ubuntu)
-        # If the versions are not 16.04, 18.04, 18.10, 20.04. 21.04
+        # If the versions are not 16.04, 18.04, 18.10, 20.04. 22.04
         # warn user and ask them to proceed with caution
         UBT_VER_STR=$CODE_NAME
-        if [[ "$VER" != "16.04" ]] && [[ "$VER" != "18.04" ]] && [[ "$VER" != "18.10" ]] && [[ "$VER" != "20.04" ]] && [[ "$VER" != "21.04" ]]; then
+        if [[ "$VER" != "16.04" ]] && [[ "$VER" != "18.04" ]] && [[ "$VER" != "18.10" ]] && [[ "$VER" != "20.04" ]] && [[ "$VER" != "22.04" ]]; then
             new_os_version_warning "${OS}" "${VER}"
         fi
         ;;
