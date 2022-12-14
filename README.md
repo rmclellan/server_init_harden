@@ -1,3 +1,5 @@
+- Check https://github.com/MJFiuba/vps-harden-and-secure for ideas & add attribution if appropriate. 
+
 # Linux Server Hardener
 Bash script that automates server security hardening on a new Linux server.
 
