@@ -156,6 +156,8 @@ while [[ "$#" -gt 0 ]]; do
                 echo
                 echo -e "${CRED}User name ($2) already exists. Skipping user creation.${CEND}\n"
                 USER_EXISTS="y"
+                AUTO_GEN_USERNAME="n"
+                NORM_USER_NAME="$2"
             else
                 AUTO_GEN_USERNAME="n"
                 NORM_USER_NAME="$2"
@@ -938,7 +940,7 @@ setup_step_start "${STEP_TEXT[1]}"
     SSH_DIR=/home/"$NORM_USER_NAME"/.ssh
     if ![[ -d $SSH_DIR ]]; then
         file_log "Creating SSH directory - $SSH_DIR"
-        mkdir "$SSH_DIR"
+        mkdir -p "$SSH_DIR"
         set_exit_code $?
     fi
 
