@@ -37,6 +37,8 @@ function usage() {
 
     echo "Usage: sudo bash $0 [-u|--username username] [-r|--resetrootpwd] [--defaultsourcelist]"
     echo "  -u,     --username              Username for your server (If omitted script will choose an username for you)"
+    echo "                                      To use the current existing user account, just enter that username."
+    echo "                                      Creation and password reset will be skipped, but other user setup will continue."
     echo "  -mp,    --manual-password       Will prompt for manual password entry for the newly created user"
     echo "  -r,     --resetrootpwd          Reset current root password"
     echo "  -hide,  --hide-credentials      Credentials will hidden from screen and can ONLY be found in the logfile"
@@ -135,6 +137,7 @@ fi
 
 # defaults
 AUTO_GEN_USERNAME="y"
+USER_EXISTS="n"
 MANUAL_USER_PASSWD="n"
 RESET_ROOT_PWD="n"
 DEFAULT_SOURCE_LIST="n"
@@ -151,8 +154,8 @@ while [[ "$#" -gt 0 ]]; do
                 exit 1
             elif [[ $(getent passwd "$2" | wc -l) -gt 0 ]]; then
                 echo
-                echo -e "${CRED}User name ($2) already exists.${CEND}\n"
-                exit 1
+                echo -e "${CRED}User name ($2) already exists. Skipping user creation.${CEND}\n"
+                USER_EXISTS="y"
             else
                 AUTO_GEN_USERNAME="n"
                 NORM_USER_NAME="$2"
@@ -895,36 +898,36 @@ function setup_step_end() {
 ##############################################################
 # Step 1 - Create non-root user
 ##############################################################
+if [[ $USER_EXISTS == "n" ]]; then
+    setup_step_start "${STEP_TEXT[0]}"
+    {
+        if [[ $AUTO_GEN_USERNAME == 'y' ]]; then
+            NORM_USER_NAME="$(< /dev/urandom tr -cd 'a-z' | head -c 6)""$(< /dev/urandom tr -cd '0-9' | head -c 2)" || exit 1
+            file_log "Generated user name ${NORM_USER_NAME}"
+        fi
 
-setup_step_start "${STEP_TEXT[0]}"
-{
-    if [[ $AUTO_GEN_USERNAME == 'y' ]]; then
-        NORM_USER_NAME="$(< /dev/urandom tr -cd 'a-z' | head -c 6)""$(< /dev/urandom tr -cd '0-9' | head -c 2)" || exit 1
-        file_log "Generated user name ${NORM_USER_NAME}"
+        if [[ $MANUAL_USER_PASSWD == 'n' ]]; then
+            # Generate a 30 character random password
+            USER_PASS="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 30)" || exit 1
+            file_log "Generated user password - ${USER_PASS}"
+        fi
+
+        # Create the user and assign the above password
+        file_log "Creating user"
+        echo -e "${USER_PASS}\\n${USER_PASS}" | adduser "$NORM_USER_NAME" -q --gecos "First Last,RoomNumber,WorkPhone,HomePhone"
+        set_exit_code $?
+
+        # Give root privilages to the above user
+        file_log "Assigning user sudo privileges"
+        usermod -aG sudo "$NORM_USER_NAME"
+        set_exit_code $?
+    } 2>> "$LOGFILE" >&2
+
+    setup_step_end "${STEP_TEXT[0]}"
+    if [[ $exit_code -gt 0 ]]; then
+        revert_everything_and_exit "${STEP_TEXT[0]}"
     fi
-
-    if [[ $MANUAL_USER_PASSWD == 'n' ]]; then
-        # Generate a 30 character random password
-        USER_PASS="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 30)" || exit 1
-        file_log "Generated user password - ${USER_PASS}"
-    fi
-
-    # Create the user and assign the above password
-    file_log "Creating user"
-    echo -e "${USER_PASS}\\n${USER_PASS}" | adduser "$NORM_USER_NAME" -q --gecos "First Last,RoomNumber,WorkPhone,HomePhone"
-    set_exit_code $?
-
-    # Give root privilages to the above user
-    file_log "Assigning user sudo privileges"
-    usermod -aG sudo "$NORM_USER_NAME"
-    set_exit_code $?
-} 2>> "$LOGFILE" >&2
-
-setup_step_end "${STEP_TEXT[0]}"
-if [[ $exit_code -gt 0 ]]; then
-    revert_everything_and_exit "${STEP_TEXT[0]}"
 fi
-
 
 ##############################################################
 # Step 2 - Create SSH Key for the above new user
