@@ -1,38 +1,45 @@
 #!/bin/bash
+############################################################
+#
+#  LINUX SERVER INITIALIZE AND HARDEN
+#  ---------------------------------------------------------
+#  Bash script that automates initial setup and hardening
+#  of a new linux server.
+#
+#        Written by: Mike Owens
+#        Email:      mikeowens (at) fastmail (dot) com
+#        Website:    https://michaelowens.me
+#        GitLab:     https://gitlab.com/mikeo85
+#        GitHub:     https://github.com/mikeo85
+#        Mastodon:   https://infosec.exchange/@m0x4d
+#        Twitter:    https://twitter.com/quietmike8192
+#
+#  Based on original work by Pratik Kumar Tripathy
+#   (https://github.com/pratiktri/server_init_harden)
+#   with various modifications and additions.
+#  
+############################################################
 
-SCRIPT_NAME=linux_init_harden
-SCRIPT_VERSION=1.99
-
-LOGFILE=/tmp/"$SCRIPT_NAME"_v"$SCRIPT_VERSION".log
-# Reset previous log file
-TS=$(date '+%d_%m_%Y-%H_%M_%S')
-echo "Starting $0 - $TS" > "$LOGFILE"
-BACKUP_EXTENSION='.'$TS"_bak"
-
-# Colors
-CSI='\033['
-CEND="${CSI}0m"
-CRED="${CSI}1;31m"
-CGREEN="${CSI}1;32m"
-
-
-##############################################################
+############################################################
 # Usage
-##############################################################
+############################################################
 
 # Script takes arguments as follows
-# linux_init_harden -username $username --resetrootpwd
-# linux_init_harden -u $username --resetrootpwd
-# linux_init_harden -username $username --resetrootpwd -q -hide
+# linux_init_harden -username myuser --resetrootpwd
+# linux_init_harden -u myuser --resetrootpwd
+# linux_init_harden -username myuser --resetrootpwd -q -hide
 
 function usage() {
     if [ -n "$1" ]; then
         echo ""
         echo -e "${CRED}$1${CEND}\n"
     fi
-	#TODO Add commandline options
+
     echo "Usage: sudo bash $0 [-u|--username username] [-r|--resetrootpwd] [--defaultsourcelist]"
     echo "  -u,     --username              Username for your server (If omitted script will choose an username for you)"
+    echo "                                      To use the current existing user account, just enter that username."
+    echo "                                      Creation and password reset will be skipped, but other user setup will continue."
+    echo "  -mp,    --manual-password       Will prompt for manual password entry for the newly created user"
     echo "  -r,     --resetrootpwd          Reset current root password"
     echo "  -hide,  --hide-credentials      Credentials will hidden from screen and can ONLY be found in the logfile"
     echo "                                  eg: tail -n 20 logfile"
@@ -41,11 +48,36 @@ function usage() {
     echo "                                  NOTE: -r, -d would be ignored"
 
     echo ""
-    echo "Example: bash ./$SCRIPT_NAME.sh --username myuseraccount --resetrootpwd"
+    echo "Example: bash ./$SCRIPT_NAME.sh --username myuser --resetrootpwd"
     printf "\\nBelow restrictions apply to usernames - \\n"
     printf "%2s - [a-zA-Z0-9] [-] [_] are allowed\\n%2s - NO special characters.\\n%2s - NO spaces.\\n" " " " " " "
 }
 
+
+##############################################################
+# Initialize variables
+##############################################################
+
+SCRIPT_NAME=linux_init_harden
+SCRIPT_VERSION=1.0
+
+LOGFILE=/tmp/"$SCRIPT_NAME"_v"$SCRIPT_VERSION".log
+# Reset previous log file
+TS=$(date -u +'%FT%TUTC' | sed 's/://g')
+echo "Starting $0 - $TS" > "$LOGFILE"
+BACKUP_EXTENSION='.'$TS".bak"
+
+# Colors
+CSI='\033['
+CEND="${CSI}0m"
+CRED="${CSI}1;31m"
+CGREEN="${CSI}1;32m"
+
+# Hostname
+HOSTNAME=$(hostname)
+
+# Supported OSes
+supported_os=("debian 9" "debian 10" "debian 11" "pop 22.04" "ubuntu 16.04")
 
 ##############################################################
 # Basic checks before starting
@@ -58,18 +90,13 @@ function usage() {
 }
 
 function os_not_supported() {
-    printf "This script only supports: \\n\\tDebian 9, 10, and 11\\n"
-    printf "\\tUbuntu 16.04, 18.04, 18.10, 20.04, and 22.04\\n"
+    printf "This script only supports the following operating systems:\\n"
+    printf "\\t$(echo ${supported_os[@]})\\n"
     printf "Your OS is NOT supported.\\n"
 }
 
 function new_os_version_warning(){
   echo "${1} version ${2} is not tested. Continuing is NOT RECOMMENDED."
-  read -p "Continue (NOT RECOMMENDED)? (Y/N): " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]] || exit 1
-}
-
-function sudo_users_detected(){
-  echo -e "Please note that the following sudo users are already detected on the system:\n${1}\nThis is probably not a fresh install.\n"
   read -p "Continue (NOT RECOMMENDED)? (Y/N): " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]] || exit 1
 }
 
@@ -79,59 +106,39 @@ if ! command -v apt-get >/dev/null; then
     exit 1
 fi
 
-# Check for sudo users
-SUDOTEST="$(egrep '^sudo:.*$' /etc/group | cut -d: -f4)"
-if echo $SUDOTEST >/dev/null; then
-   sudo_users_detected "${SUDOTEST}"
-   exit 1
-else
-    echo "No Super Users Detected.  Proceeding."
-fi
-
 # Check supported OSes
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     OS=$ID
     VER=$VERSION_ID
     CODE_NAME=$VERSION_CODENAME
-	if (($ID = debian)); then
-	elif (($ID_LIKE = debian)); then
-	else 
-		os_not_supported
-    exit 1
-	fi
-fi
-
-case "$OS" in
-    debian)
-        # If the versions are not 9, 10, 11
-        # warn user and ask them to proceed with caution
-        DEB_VER_STR=$CODE_NAME
-        if ((VER >= 9 && VER <= 11)); then
-            new_os_version_warning
+    echo "OS identified as: $ID $VER $CODE_NAME"
+    OS_OK=0
+    for o in "${supported_os[@]}"; do
+        echo "$OS $VER ==? $o"
+        if [[ "$OS $VER" = "$o" ]]; then
+            OS_OK=1
+            break
         fi
-        ;;
-    ubuntu)
-        # If the versions are not 16.04, 18.04, 18.10, 20.04, 22.04
-        # warn user and ask them to proceed with caution
-        UBT_VER_STR=$CODE_NAME
-        if [[ "$VER" != "16.04" ]] && [[ "$VER" != "18.04" ]] && [[ "$VER" != "18.10" ]] && [[ "$VER" != "20.04" ]] && [[ "$VER" != "22.04" ]]; then
-            new_os_version_warning "${OS}" "${VER}"
-        fi
-        ;;
-    *)
+    done
+    if [[ $OS_OK -eq 0 ]]; then 
         os_not_supported
-        exit 1
-        ;;
-esac
+        new_os_version_warning "${OS}" "${VER}"
+        echo "os not supported"
+    fi
+else
+    os_not_supported
+    exit 1
+fi
 
 ##################################
 # Parse script arguments
 ##################################
 
 # defaults
-#TODO add more defaults
 AUTO_GEN_USERNAME="y"
+USER_EXISTS="n"
+MANUAL_USER_PASSWD="n"
 RESET_ROOT_PWD="n"
 DEFAULT_SOURCE_LIST="n"
 QUIET="n"
@@ -147,14 +154,20 @@ while [[ "$#" -gt 0 ]]; do
                 exit 1
             elif [[ $(getent passwd "$2" | wc -l) -gt 0 ]]; then
                 echo
-                echo -e "${CRED}User name ($2) already exists.${CEND}\n"
-                exit 1
+                echo -e "${CRED}User name ($2) already exists. Skipping user creation.${CEND}\n"
+                USER_EXISTS="y"
+                AUTO_GEN_USERNAME="n"
+                NORM_USER_NAME="$2"
             else
                 AUTO_GEN_USERNAME="n"
                 NORM_USER_NAME="$2"
             fi
 
             shift
+            shift
+            ;;
+        -mp|--manual-password)
+            MANUAL_USER_PASSWD="y"
             shift
             ;;
         -ou|--only-user)
@@ -219,12 +232,46 @@ Script logs all operation into (${LOGFILE}) file.
 ##################################################################
 
 INFORM
-#TODO UPDATE INFORM
+
 echo "Installation options selected - " | tee -a "$LOGFILE"
 if [[ "$AUTO_GEN_USERNAME" == "y" ]]; then
     printf "%3s Username will be auto generated by script\\n" " -" | tee -a "$LOGFILE"
 else
     printf "%3s Username you opted = %s\\n" " -" "$NORM_USER_NAME" | tee -a "$LOGFILE"
+fi
+if [[ $MANUAL_USER_PASSWD == 'y' ]]; then
+    ct=0
+    while true; do
+        if [[ $ct -lt 3 ]]; then                # Only offer password entry three times
+            echo "Enter a password for new user $NORM_USER_NAME (minimum 15 characters)."
+            stty_orig=$(stty -g)
+            stty -echo
+            read -p "Password: " pw1
+            echo ""
+            read -p "Reenter Password: " pw2
+            echo ""
+            stty $stty_orig
+            if [[ "$pw1" == "$pw2" ]]; then     # Confirm entered passwords match
+                if [[ ${#pw1} -ge 15 ]]; then   # Confirm password is long enough
+                    echo "Password entered successfully."
+                    USER_PASS="$pw1"
+                    pw1=''
+                    pw2=''
+                    break
+                else                            # Password too short
+                    echo "Password does not meet minimum length. Try again."
+                    ct=$ct+1
+                fi
+            else                                # Entered passwords do not match
+                echo "Entered passwords do not match. Try again."
+                ct=$ct+1
+            fi
+        else
+            echo "Password entry failed three times. A randomly-generated password will be created instead."
+            MANUAL_USER_PASSWD='n'
+            break
+        fi
+    done
 fi
 if [[ "$DEFAULT_SOURCE_LIST" == "y" && "$USER_CREATION_ALONE" == "n" ]]; then
     printf "%3s Reset the url for apt repo from VPS provided CDN to OS provided ones\\n" " -" | tee -a "$LOGFILE"
@@ -261,7 +308,7 @@ SECONDS=0
 
 CVERTICAL="|"
 CHORIZONTAL="_"
-CLINESIZE=72
+CLINESIZE=80
 
 function center_text(){
   textsize=${#1}
@@ -300,7 +347,7 @@ function line_fill() {
 ##############################################################
 
 function file_log(){
-    printf "%s - %s\\n" "$(date '+%d-%b-%Y %H:%M:%S')" "$1" >> "$LOGFILE"
+    printf "%s - %s\\n" "$(date -u +'%F %T UTC')" "$1" >> "$LOGFILE"
 }
 
 function log_step_status() {
@@ -346,7 +393,7 @@ function log_ops_finish (){
 
     if [[ $HIDE_CREDENTIALS == "n" ]]; then
         horizontal_fill "$CVERTICAL" 1
-        printf "%23s:%3s%-54s" "$purpose" " " "$(echo -e "$value")"
+        printf "%23s:%3s%-62s" "$purpose" " " "$(echo -e "$value")"
         line_fill "$CVERTICAL" 1
     fi    
 }
@@ -657,8 +704,6 @@ exit_code=0
     # 1 - STARTED - Started
     # 2 - SUCCESSFUL - Successfully Completed
     # 3 - FAILED - Completed with Error
-
-#TODO Add STatus
 CreateNonRootUser=0
 CreateSSHKey=0
 SecureAuthkeysfile=0
@@ -670,7 +715,6 @@ ChangeRootPwd=0
 ScheduleUpdate=0
 EnableSSHOnly=0
 
-#TODO add step text
 STEP_TEXT=(
     "Creating new user" #0
     "Creating SSH Key for new user" #1
@@ -792,8 +836,8 @@ function recap() {
     fi
     log_ops_finish "User Name" "$CreateNonRootUser" "$NORM_USER_NAME"
     log_ops_finish "User's Password" "$CreateNonRootUser" "$USER_PASS"
-    log_ops_finish "SSH Private Key File" "$CreateSSHKey" "$SSH_DIR"/"$NORM_USER_NAME".pem
-    log_ops_finish "SSH Public Key File" "$CreateSSHKey" "$SSH_DIR"/"$NORM_USER_NAME".pem.pub
+    log_ops_finish "SSH Private Key File" "$CreateSSHKey" "$SSH_DIR"/"$KEYFILENAME"
+    log_ops_finish "SSH Public Key File" "$CreateSSHKey" "$SSH_DIR"/"$KEYFILENAME".pub
     log_ops_finish "SSH Key Passphrase" "$CreateSSHKey" "$KEY_PASS"    
     if [[ "$RESET_ROOT_PWD" == "y" && "$USER_CREATION_ALONE" == "n" ]]; then
         log_ops_finish "New root Password" "$ChangeRootPwd" "$PASS_ROOT"
@@ -802,12 +846,13 @@ function recap() {
         line_fill "$CHORIZONTAL" "$CLINESIZE"
     fi
 
-    log_ops_finish_file_contents "SSH Private Key" "$SSH_DIR"/"$NORM_USER_NAME".pem
-    log_ops_finish_file_contents "SSH Public Key" "$SSH_DIR"/"$NORM_USER_NAME".pem.pub
+    # log_ops_finish_file_contents "SSH Private Key" "$SSH_DIR"/"$KEYFILENAME"
+    # log_ops_finish_file_contents "SSH Public Key" "$SSH_DIR"/"$KEYFILENAME".pub
     
     line_fill "$CHORIZONTAL" "$CLINESIZE"
     center_reg_text "!!! DO NOT LOG OUT JUST YET !!!"
-    center_reg_text "Use another window to test out the above credentials"
+    # center_reg_text "Use another window to test out the above credentials"
+    center_reg_text "Use another window to validate that you can log in using your SSH key"
     center_reg_text "If you face issue logging in, check the log file to see what went wrong"
     center_reg_text "Log file at ${LOGFILE}"
 
@@ -855,34 +900,37 @@ function setup_step_end() {
 ##############################################################
 # Step 1 - Create non-root user
 ##############################################################
+if [[ $USER_EXISTS == "n" ]]; then
+    setup_step_start "${STEP_TEXT[0]}"
+    {
+        if [[ $AUTO_GEN_USERNAME == 'y' ]]; then
+            NORM_USER_NAME="$(< /dev/urandom tr -cd 'a-z' | head -c 6)""$(< /dev/urandom tr -cd '0-9' | head -c 2)" || exit 1
+            file_log "Generated user name ${NORM_USER_NAME}"
+        fi
 
-setup_step_start "${STEP_TEXT[0]}"
-{
-    if [[ $AUTO_GEN_USERNAME == 'y' ]]; then
-        NORM_USER_NAME="$(< /dev/urandom tr -cd 'a-z' | head -c 6)""$(< /dev/urandom tr -cd '0-9' | head -c 2)" || exit 1
-        file_log "Generated user name ${NORM_USER_NAME}"
+        if [[ $MANUAL_USER_PASSWD == 'n' ]]; then
+            # Generate a 30 character random password
+            USER_PASS="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 30)" || exit 1
+            file_log "Generated user password - ${USER_PASS}"
+        fi
+
+        # Create the user and assign the above password
+        file_log "Creating user"
+        #echo -e "${USER_PASS}\\n${USER_PASS}" | adduser "$NORM_USER_NAME" -q --home /home/$NORM_USER_NAME --gecos "First Last,RoomNumber,WorkPhone,HomePhone"
+        echo -e "${USER_PASS}\\n${USER_PASS}" | adduser "$NORM_USER_NAME" -q --gecos "First Last,RoomNumber,WorkPhone,HomePhone"
+        set_exit_code $?
+
+        # Give root privilages to the above user
+        file_log "Assigning user sudo privileges"
+        usermod -aG sudo "$NORM_USER_NAME"
+        set_exit_code $?
+    } 2>> "$LOGFILE" >&2
+
+    setup_step_end "${STEP_TEXT[0]}"
+    if [[ $exit_code -gt 0 ]]; then
+        revert_everything_and_exit "${STEP_TEXT[0]}"
     fi
-
-    # Generate a 15 character random password
-    USER_PASS="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 15)" || exit 1
-    file_log "Generated user password - ${USER_PASS}"
-
-    # Create the user and assign the above password
-    file_log "Creating user"
-    echo -e "${USER_PASS}\\n${USER_PASS}" | adduser "$NORM_USER_NAME" -q --gecos "First Last,RoomNumber,WorkPhone,HomePhone"
-    set_exit_code $?
-
-    # Give root privilages to the above user
-    file_log "Assigning user sudo privileges"
-    usermod -aG sudo "$NORM_USER_NAME"
-    set_exit_code $?
-} 2>> "$LOGFILE" >&2
-
-setup_step_end "${STEP_TEXT[0]}"
-if [[ $exit_code -gt 0 ]]; then
-    revert_everything_and_exit "${STEP_TEXT[0]}"
 fi
-
 
 ##############################################################
 # Step 2 - Create SSH Key for the above new user
@@ -891,22 +939,33 @@ fi
 setup_step_start "${STEP_TEXT[1]}"
 {
     SSH_DIR=/home/"$NORM_USER_NAME"/.ssh
-    file_log "Creating SSH directory - $SSH_DIR"
-    mkdir "$SSH_DIR"
-    set_exit_code $?
+    if ![[ -d $SSH_DIR ]]; then
+        file_log "Creating SSH directory - $SSH_DIR"
+        mkdir -p "$SSH_DIR"
+        set_exit_code $?
+    else
+        file_log "Existing SSH Directory - $SSH_DIR"
+    fi
 
-    # Generate a 15 character random password for key
-    KEY_PASS="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 15)"
-    file_log "Generated SSH Key Passphrase - ${KEY_PASS}"
+    # # Generate a 30 character random password for key
+    # KEY_PASS="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 30)"
+    # file_log "Generated SSH Key Passphrase - ${KEY_PASS}"
+    # set_exit_code $?
+
+    # Do not add password to key
+    KEY_PASS=''
+    file_log "Generated SSH Key -- No Passphrase"
     set_exit_code $?
 
     # Create a OpenSSH-compliant ed25519-type key
-    file_log "Generating SSH Key File - $SSH_DIR/$NORM_USER_NAME.pem"
-    ssh-keygen -a 1000 -o -t ed25519 -N "$KEY_PASS" -C "$NORM_USER_NAME" -f "$SSH_DIR"/"$NORM_USER_NAME".pem -q
+    KEYALGO="ed25519"
+    KEYFILENAME="$HOSTNAME"_"$NORM_USER_NAME"_"$KEYALGO".pem
+    file_log "Generating SSH Key File - $KEYFILENAME"
+    ssh-keygen -a 1000 -o -t ed25519 -N "$KEY_PASS" -C "$NORM_USER_NAME @ $HOSTNAME -- Generated $(date -u +'%F %T UTC')" -f "$SSH_DIR"/"$KEYFILENAME" -q
     set_exit_code $?
 
     # Copy the generated public file to authorized_keys
-    cat "$SSH_DIR"/"$NORM_USER_NAME".pem.pub >> "$SSH_DIR"/authorized_keys
+    cat "$SSH_DIR"/"$KEYFILENAME".pub >> "$SSH_DIR"/authorized_keys
     set_exit_code $?
 } 2>> "$LOGFILE" >&2
 
@@ -928,17 +987,18 @@ setup_step_start "${STEP_TEXT[2]}"
     chown -R "$NORM_USER_NAME" "$SSH_DIR" && \
         chgrp -R "$NORM_USER_NAME" "$SSH_DIR" && \
         chmod 700 "$SSH_DIR" && \
-        chmod 400 "$SSH_DIR"/authorized_keys && \
-        chattr +i "$SSH_DIR"/authorized_keys
+        chmod 600 "$SSH_DIR"/authorized_keys # && \
+        # chattr +i "$SSH_DIR"/authorized_keys
     set_exit_code $?
 
     # Restrict access to the generated SSH Key files as well
     shopt -s nullglob
-    KEY_FILES=("$SSH_DIR"/"$NORM_USER_NAME".pem*)
+    KEY_FILES=("$SSH_DIR"/"$KEYFILENAME"*)
     for key in "${KEY_FILES[@]}"; do
-        file_log "Restricting access (chmod 400 and chattr +i) to ${key} file"
-        chmod 400 "$key" && \
-            chattr +i "$key"
+        # file_log "Restricting access (chmod 400 and chattr +i) to ${key} file"
+        file_log "Restricting access (chmod 400) to ${key} file"
+        chmod 400 "$key" # && \
+            # chattr +i "$key"
         set_exit_code $?
     done
 } 2>> "$LOGFILE" >&2
@@ -1186,71 +1246,35 @@ fi
 
 
 ##############################################################
-# Step 8 - Configure Unattended Security Updates
+# Step 8 - Schedule cron for daily system update
 ##############################################################
 
+setup_step_start "${STEP_TEXT[9]}"
+{
+    dailycron_filename=/etc/cron.daily/linux_init_harden_apt_update.sh
 
-if [[ $UNATTENDED == 'y' ]]; then
-	setup_step_start "${STEP_TEXT[9]}"
-	{
-		 # Check if we've installed already
-    	if [[ $(dpkg --get-selections | grep unattended-upgrades) ]] ; then
-        	file_log "Unattended Upgrades is already installed. Skipping this step..."
-        	update_step_status "${STEP_TEXT[9]}" 0
-    	else
-        	file_log "Installing and scheduling Unattended Upgrades"
-        	apt -y install unattended-upgrades >>$LOG 2>&1
-			echo unattended-upgrades unattended-upgrades/enable_auto_updates boolean true | debconf-set-selections
-			dpkg-reconfigure -f noninteractive unattended-upgrades >>$LOG 2>&1
-			cat > /etc/apt/apt.conf.d/10periodic <<EOF
-			APT::Periodic::Download-Upgradeable-Packages "1";
-			APT::Periodic::AutocleanInterval "1";
-			EOF
-			cat > /etc/apt/apt.conf.d/50unattended-upgrades <<EOF
-			Unattended-Upgrade::Allowed-Origins {
-			"\${distro_id}:\${distro_codename}";
-			"\${distro_id}:\${distro_codename}-security";
-			"\${distro_id}ESM:\${distro_codename}";
-			};
-			Unattended-Upgrade::Package-Blacklist {
-			};
-			Unattended-Upgrade::Automatic-Reboot "true";
-			Unattended-Upgrade::Automatic-Reboot-Time "02:00";
-			EOF
-			rm -rf /etc/systemd/system/apt-daily.timer* >>$LOG 2>&1
-			cat > /etc/systemd/system/apt-daily.timer <<EOF
-			[Unit]
-			Description=Daily apt download activities
-			[Timer]
-			OnCalendar=*-*-* 6,18:00
-			RandomizedDelaySec=6h
-			Persistent=true
-			[Install]
-			WantedBy=timers.target
-			EOF
-			rm -rf /etc/systemd/system/apt-daily-upgrade.timer* >>$LOG 2>&1
-			cat > /etc/systemd/system/apt-daily-upgrade.timer <<EOF
-			Description=Daily apt upgrade and clean activities
-			After=apt-daily.timer
-			[Timer]
-			OnCalendar=*-*-* 0:25
-			RandomizedDelaySec=30m
-			Persistent=true
-			[Install]
-			WantedBy=timers.target
-			EOF
-			systemctl daemon-reload >>$LOG 2>&1
-        	set_exit_code $?
-    	fi
-	} 2>> "$LOGFILE" >&2
+    # Check if we created a schedule already
+    if [[ -f $dailycron_filename ]] ; then
+        file_log "$dailycron_filename file already exists. Skipping this step..."
+        update_step_status "${STEP_TEXT[9]}" 0
+    else
+        # If not created already - create one into the file
+        file_log "Adding our schedule to the script file ${dailycron_filename}"
+        echo "#!/bin/sh" >> $dailycron_filename
+        echo 'apt-get update && apt-get -y -d upgrade' >> $dailycron_filename
+        set_exit_code $?
 
-	setup_step_end "${STEP_TEXT[9]}"
-	if [[ $exit_code -gt 0 ]]; then
-		# TODO - Fix the reversion
-    	#revert_schedule_updates
-		echo "Reversion is currently broken.  Please roll back Unattended Upgrades Manually."
-	fi
+        file_log "Granting execute permission on ${dailycron_filename} file"
+        chmod +x $dailycron_filename
+        set_exit_code $?
+    fi
+} 2>> "$LOGFILE" >&2
+
+setup_step_end "${STEP_TEXT[9]}"
+if [[ $exit_code -gt 0 ]]; then
+    revert_schedule_updates
 fi
+
 
 ##############################################################
 # Step 9 - Change root's password
@@ -1259,9 +1283,9 @@ fi
 if [[ $RESET_ROOT_PWD == 'y' ]]; then
     setup_step_start "${STEP_TEXT[8]}"
     {
-        # Generate a 15 character random password
+        # Generate a 30 character random password
         file_log "Generating roots new password..."
-        PASS_ROOT="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 15)"
+        PASS_ROOT="$(< /dev/urandom tr -cd "[:alnum:]" | head -c 30)"
         set_exit_code $?
 
         file_log "Generated root Password - ${PASS_ROOT}"
@@ -1282,133 +1306,145 @@ fi
 ##############################################################
 # Step 10 - Enable SSH-only login
 ##############################################################
-INFO="SSH Server Hardening" ; DisplayInfo
-cp /etc/ssh/sshd_config /etc/ssh/backup.sshd_config
-cp /etc/ssh/moduli /etc/ssh/backup.moduli
-sed -i '/X11Forwarding/c\X11Forwarding no' /etc/ssh/sshd_config >>$LOG 2>&1
-sed -i 's/^#HostKey \/etc\/ssh\/ssh_host_\(rsa\|ed25519\)_key$/\HostKey \/etc\/ssh\/ssh_host_\1_key/g' /etc/ssh/sshd_config >>$LOG 2>&1
-sed -i 's/^HostKey \/etc\/ssh\/ssh_host_\(dsa\|ecdsa\)_key$/\#HostKey \/etc\/ssh\/ssh_host_\1_key/g' /etc/ssh/sshd_config >>$LOG 2>&1
-echo -e "\n# Restrict key exchange, cipher, and MAC algorithms\nKexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256\nCiphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr\nMACs hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,umac-128-etm@openssh.com\nHostKeyAlgorithms ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-512,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com" > /etc/ssh/sshd_config.d/ssh-audit_hardening.conf
-awk '$5 >= 3071' /etc/ssh/moduli > /etc/ssh/moduli.safe
-mv /etc/ssh/moduli.safe /etc/ssh/moduli
-rm /etc/ssh/ssh_host_* >>$LOG 2>&1
-ssh-keygen -t rsa -b 4096 -f /etc/ssh/ssh_host_rsa_key -N "" >>$LOG 2>&1
-ssh-keygen -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -N "" >>$LOG 2>&1
-service ssh restart >>$LOG 2>&1
-ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N "" <<<y >>$LOG 2>&1
-ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" <<<y >>$LOG 2>&1
 
+## STEP 10.1 -- FIRST PROMPT USER TO LOAD THEIR SSH KEY AND VALIDATE ACCESS
+my_ip=$(ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
+my_public_ip=$(curl https://ipinfo.io/ip 2>> /dev/null) 
 
-# TODO - Make this cleaner
-function config_search_regex(){
-    local search_key=$1
-    declare -i isCommented=$2
-    local value=$3
+echo ""
+echo ""
+echo "Before disabling SSH password login, add your public key to this machine to maintain remote access. Do this using the ssh-copy-id command. "
+echo "IP address to use may vary depending on your networking situation. The network IP of this machine is $my_ip. The Internet IP of this machine is $my_public_ip."
+echo ""
+echo "Example (network):  ssh-copy-id -i /path/to/keyfile -o PubkeyAuthentication=no "$NORM_USER_NAME"@$my_ip"
+echo "Example (internet): ssh-copy-id -i /path/to/keyfile -o PubkeyAuthentication=no "$NORM_USER_NAME"@$my_public_ip"
+echo ""
+echo "Password for user $NORM_USER_NAME: $USER_PASS"
+echo ""
+echo "ADD YOUR SSH KEY AT THIS TIME"
+read -p "Was your SSH key added successfully? (Y/N): " key_confirm
+echo ""
+if [[ $key_confirm == [yY] || $key_confirm == [yY][eE][sS] ]]; then
+    echo "Disabling SSH password login..."
+    echo ""
 
-    if [[ "$isCommented" -eq 1 ]] && [[ ! "$value" ]]; then
-        # Search Regex for an uncommented (active) field
-        echo '(^ *)'"$search_key"'( *).*([[:word:]]+)( *)$'
-    elif [[ "$isCommented" -eq 2 ]] && [[ ! "$value" ]]; then
-        # Search Regex for a commented out field
-        echo '(^ *)#.*'"$search_key"'( *).*([[:word:]]+)( *)$'
+    ## STEP 10.2 -- DISABLE SSH PASSWORD LOGIN
 
-    elif [[ "$isCommented" -eq 1 ]] && [[ "$value" ]]; then
-        # Search Regex for an active field with specified value
-        echo '(^ *)'"$search_key"'( *)('"$value"')( *)$'
-    elif [[ "$isCommented" -eq 2 ]] && [[ "$value" ]]; then
-        # Search Regex for an commented (inactive) field with specified value
-        echo '(^ *)#.*'"$search_key"'( *)('"$value"')( *)$'
+    # TODO - Make this cleaner
+    function config_search_regex(){
+        local search_key=$1
+        declare -i isCommented=$2
+        local value=$3
 
-    else
-        exit 1    
-    fi
-}
+        if [[ "$isCommented" -eq 1 ]] && [[ ! "$value" ]]; then
+            # Search Regex for an uncommented (active) field
+            echo '(^ *)'"$search_key"'( *).*([[:word:]]+)( *)$'
+        elif [[ "$isCommented" -eq 2 ]] && [[ ! "$value" ]]; then
+            # Search Regex for a commented out field
+            echo '(^ *)#.*'"$search_key"'( *).*([[:word:]]+)( *)$'
 
-function set_config_key(){
-    local file_location=$1
-    local key=$2
-    local value=$3
+        elif [[ "$isCommented" -eq 1 ]] && [[ "$value" ]]; then
+            # Search Regex for an active field with specified value
+            echo '(^ *)'"$search_key"'( *)('"$value"')( *)$'
+        elif [[ "$isCommented" -eq 2 ]] && [[ "$value" ]]; then
+            # Search Regex for an commented (inactive) field with specified value
+            echo '(^ *)#.*'"$search_key"'( *)('"$value"')( *)$'
 
-    ACTIVE_KEYS_REGEX=$(config_search_regex "$key" "1")
-    ACTIVE_CORRECT_KEYS_REGEX=$(config_search_regex "$key" "1" "$value")
-    INACTIVE_KEYS_REGEX=$(config_search_regex "$key" "2")
-
-    # If no keys present - insert the correct configuration to the end of the file
-    if [[ $(grep -Pnc "$INACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]] && [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]];
-    then
-        echo "$key" "$value" >> "$file_location"
-    fi
-
-    # If Config file already has correct configuration
-    # Keep only the LAST correct one and comment out the rest
-    if [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -gt 0 ]]; 
-    then
-        # Last correct active entry's line number
-        LAST_CORRECT_LINE=$(grep -Pn "$ACTIVE_CORRECT_KEYS_REGEX" "$file_location" | tail -1 | cut -d: -f 1)
-
-        # Loop through each of the active lines
-        grep -Pn "$ACTIVE_KEYS_REGEX" "$file_location" | while read -r i; 
-        do
-            # Get the line number
-            LINE_NUMBER=$(echo "$i" | cut -d: -f 1 )
-
-            # If this is the last correct entry - break
-            if [[ $LAST_CORRECT_LINE -ne 0 ]] && [[ $LINE_NUMBER == "$LAST_CORRECT_LINE" ]]; then
-                break
-            fi
-
-            # Comment out the line
-            sed -i "$LINE_NUMBER"'s/.*/#&/' "$file_location"
-        done
-    fi
-
-    # If Config file has commented configuration and NO active configuration 
-    # Append the appropriate configuration below the LAST commented configuration
-    if [[ $(grep -Pnc "$INACTIVE_KEYS_REGEX" "$file_location") -gt 0 ]] && [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]]; 
-    then
-        # Get the line number of - last commented configuration
-        LINE_NUMBER=$(grep -Pn "$INACTIVE_KEYS_REGEX" "$file_location" | tail -1 | cut -d: -f 1)
-
-        (( LINE_NUMBER++ ))
-
-        # Insert the correct setting below the last commented configuration
-        sed -i "$LINE_NUMBER"'i'"$key"' '"$value" "$file_location"
-    fi
-}
-
-setup_step_start "${STEP_TEXT[3]}"
-{
-    # Backup the sshd_config file
-    file_log "Backing up /etc/ssh/sshd_config file to /etc/ssh/sshd_config$BACKUP_EXTENSION"
-    cp /etc/ssh/sshd_config /etc/ssh/sshd_config"$BACKUP_EXTENSION"
-    set_exit_code $?
-
-    # Remove root login
-    file_log "Removing root login -> PermitRootLogin no"
-    set_config_key "/etc/ssh/sshd_config" "PermitRootLogin" "no"
-    set_exit_code $?
-
-    # Disable password login
-    file_log "Disabling password login -> PasswordAuthentication no"
-    set_config_key "/etc/ssh/sshd_config" "PasswordAuthentication" "no"
-    set_exit_code $?
-
-    # Set SSH Authorization-Keys path
-    file_log "Setting SSH Authorization-Keys path -> AuthorizedKeysFile '%h\/\.ssh\/authorized_keys'"
-    set_config_key "/etc/ssh/sshd_config" "AuthorizedKeysFile" '\.ssh\/authorized_keys %h\/\.ssh\/authorized_keys'
-    set_exit_code $?
-
-    file_log "Restarting ssh service..."
-    { 
-        set_exit_code $(service_action_and_chk_error "sshd" "restart")
-        if [[ $exit_code -eq 0 ]]; then
-            false
+        else
+            exit 1    
         fi
-        } || { 
-                # Because Ubuntu 14.04 does not have sshd
-                set_exit_code $(service_action_and_chk_error "ssh" "restart")
-            }
-} 2>> "$LOGFILE" >&2
+    }
+
+    function set_config_key(){
+        local file_location=$1
+        local key=$2
+        local value=$3
+
+        ACTIVE_KEYS_REGEX=$(config_search_regex "$key" "1")
+        ACTIVE_CORRECT_KEYS_REGEX=$(config_search_regex "$key" "1" "$value")
+        INACTIVE_KEYS_REGEX=$(config_search_regex "$key" "2")
+
+        # If no keys present - insert the correct configuration to the end of the file
+        if [[ $(grep -Pnc "$INACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]] && [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]];
+        then
+            echo "$key" "$value" >> "$file_location"
+        fi
+
+        # If Config file already has correct configuration
+        # Keep only the LAST correct one and comment out the rest
+        if [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -gt 0 ]]; 
+        then
+            # Last correct active entry's line number
+            LAST_CORRECT_LINE=$(grep -Pn "$ACTIVE_CORRECT_KEYS_REGEX" "$file_location" | tail -1 | cut -d: -f 1)
+
+            # Loop through each of the active lines
+            grep -Pn "$ACTIVE_KEYS_REGEX" "$file_location" | while read -r i; 
+            do
+                # Get the line number
+                LINE_NUMBER=$(echo "$i" | cut -d: -f 1 )
+
+                # If this is the last correct entry - break
+                if [[ $LAST_CORRECT_LINE -ne 0 ]] && [[ $LINE_NUMBER == "$LAST_CORRECT_LINE" ]]; then
+                    break
+                fi
+
+                # Comment out the line
+                sed -i "$LINE_NUMBER"'s/.*/#&/' "$file_location"
+            done
+        fi
+
+        # If Config file has commented configuration and NO active configuration 
+        # Append the appropriate configuration below the LAST commented configuration
+        if [[ $(grep -Pnc "$INACTIVE_KEYS_REGEX" "$file_location") -gt 0 ]] && [[ $(grep -Pnc "$ACTIVE_KEYS_REGEX" "$file_location") -eq 0 ]]; 
+        then
+            # Get the line number of - last commented configuration
+            LINE_NUMBER=$(grep -Pn "$INACTIVE_KEYS_REGEX" "$file_location" | tail -1 | cut -d: -f 1)
+
+            (( LINE_NUMBER++ ))
+
+            # Insert the correct setting below the last commented configuration
+            sed -i "$LINE_NUMBER"'i'"$key"' '"$value" "$file_location"
+        fi
+    }
+
+    setup_step_start "${STEP_TEXT[3]}"
+    {
+        # Backup the sshd_config file
+        file_log "Backing up /etc/ssh/sshd_config file to /etc/ssh/sshd_config$BACKUP_EXTENSION"
+        cp /etc/ssh/sshd_config /etc/ssh/sshd_config"$BACKUP_EXTENSION"
+        set_exit_code $?
+
+        # Remove root login
+        file_log "Removing root login -> PermitRootLogin no"
+        set_config_key "/etc/ssh/sshd_config" "PermitRootLogin" "no"
+        set_exit_code $?
+
+        # Disable password login
+        file_log "Disabling password login -> PasswordAuthentication no"
+        set_config_key "/etc/ssh/sshd_config" "PasswordAuthentication" "no"
+        set_exit_code $?
+
+        # Set SSH Authorization-Keys path
+        file_log "Setting SSH Authorization-Keys path -> AuthorizedKeysFile '%h\/\.ssh\/authorized_keys'"
+        set_config_key "/etc/ssh/sshd_config" "AuthorizedKeysFile" '\.ssh\/authorized_keys %h\/\.ssh\/authorized_keys'
+        set_exit_code $?
+
+        file_log "Restarting ssh service..."
+        { 
+            set_exit_code $(service_action_and_chk_error "sshd" "restart")
+            if [[ $exit_code -eq 0 ]]; then
+                false
+            fi
+            } || { 
+                    # Because Ubuntu 14.04 does not have sshd
+                    set_exit_code $(service_action_and_chk_error "ssh" "restart")
+                }
+    } 2>> "$LOGFILE" >&2
+
+else
+    echo "Password login will not be disabled at this time."
+    set_exit_code 0
+fi
 
 setup_step_end "${STEP_TEXT[3]}"
 if [[ $exit_code -gt 0 ]]; then
@@ -1416,303 +1452,8 @@ if [[ $exit_code -gt 0 ]]; then
     revert_everything_and_exit "${STEP_TEXT[3]}"
 fi
 
-
 ##############################################################
 # Recap
 ##############################################################
 
 recap
-
-
-#!/bin/bash
-#
-# After deploying a new Ubuntu Linux server on Digital Ocean or Linode, there
-# are a few customization steps I take to improve usability and security of the
-# server. This script is intended for a new install of Ubuntu Linux 20.04 LTS.
-#
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-LOG=/root/Ubuntu20Setup.log
-RED="$(tput setaf 1)"
-YELLOW="$(tput setaf 3)"
-CYAN="$(tput setaf 6)"
-NORMAL="$(tput sgr0)"
-
-function DisplayInfo { 
-	printf "${CYAN}$INFO${NORMAL}\\n"
-	printf "\\n$INFO\\n" >>$LOG
-}
-
-> $LOG
-INFO="New Ubuntu Server Setup started at $(date)" ; DisplayInfo
-
-INFO="Configure Hostname" ; DisplayInfo
-printf "${YELLOW}Please enter a fully qualified hostname (e.g.: host.example.com): ${NORMAL}"
-read -r line
-
-INFO="Setting hostname to $line" ; DisplayInfo
-hostnamectl set-hostname $line >>$LOG 2>&1
-shortname=$(echo "$line" | cut -d"." -f1)
-defaultdev=$(ip ro ls|grep default|awk '{print $5}')
-primaryaddr=$(ip -f inet addr show dev "$defaultdev" | grep 'inet ' | awk '{print $2}' | cut -d"/" -f1 | cut -f1)
-INFO="Primary IPv4 Address identified as $primaryaddr" ; DisplayInfo
-
-INFO="Rebuilding hosts file" ; DisplayInfo
-mv /etc/hosts /etc/hosts.old
-printf "%s\\t%s\\n" "127.0.0.1" "localhost" > /etc/hosts
-printf "%s\\t%s\\t%s\\n" "$primaryaddr" "$line" "$shortname" >> /etc/hosts
-cat /etc/hosts >>$LOG 2>&1
-
-
-INFO="Install Strong Entropy" ; DisplayInfo
-apt -y install haveged pollinate >>$LOG 2>&1
-(crontab -l 2>> $LOG ; echo "@reboot sleep 60 ; /usr/bin/pollinate -r" )| crontab - >>$LOG 2>&1
-
-INFO="Create Linux Update Scripts" ; DisplayInfo
-cat > /usr/local/bin/linux-update << EOF
-apt-get -y autoremove --purge
-sync
-apt-get clean
-apt-get autoclean
-apt update
-apt -y full-upgrade
-sync
-update-grub
-echo "Press Enter to reboot or Ctrl-C to abort..."
-read aa
-sync
-reboot
-EOF
-cat > /usr/local/bin/linux-cleanup << EOF
-apt-get -y autoremove --purge
-sync
-update-grub
-EOF
-chmod +rx /usr/local/bin/linux-update /usr/local/bin/linux-cleanup
-
-INFO="Harden IPv4 Network" ; DisplayInfo
-cat > /etc/sysctl.conf <<EOF
-# IP Spoofing protection
-net.ipv4.conf.all.rp_filter = 1
-net.ipv4.conf.default.rp_filter = 1
-# Ignore ICMP broadcast requests
-net.ipv4.icmp_echo_ignore_broadcasts = 1
-# Disable source packet routing
-net.ipv4.conf.all.accept_source_route = 0
-net.ipv4.conf.default.accept_source_route = 0
-# Ignore send redirects
-net.ipv4.conf.all.send_redirects = 0
-net.ipv4.conf.default.send_redirects = 0
-# Block SYN attacks
-net.ipv4.tcp_syncookies = 1
-net.ipv4.tcp_max_syn_backlog = 2048
-net.ipv4.tcp_synack_retries = 2
-net.ipv4.tcp_syn_retries = 5
-# Log Martians
-net.ipv4.conf.all.log_martians = 1
-net.ipv4.icmp_ignore_bogus_error_responses = 1
-# Ignore ICMP redirects
-net.ipv4.conf.all.accept_redirects = 0
-net.ipv4.conf.default.accept_redirects = 0
-net.ipv4.conf.all.secure_redirects = 0
-net.ipv4.conf.default.secure_redirects = 0
-EOF
-
-INFO="Disable IPv6" ; DisplayInfo
-cat >> /etc/sysctl.conf <<EOF
-# Disable IPv6
-net.ipv6.conf.all.disable_ipv6 = 1
-net.ipv6.conf.default.disable_ipv6 = 1
-net.ipv6.conf.lo.disable_ipv6 = 1
-EOF
-
-INFO="Restrict Root Login to Console" ; DisplayInfo
-cp /etc/securetty /etc/securetty.old
-cat > /etc/securetty <<EOF
-console
-tty1
-tty2
-tty3
-tty4
-tty5
-tty6
-EOF
-
-INFO="Configure Time(NTP) Services" ; DisplayInfo
-ln -fs /usr/share/zoneinfo/America/Vancouver /etc/localtime
-dpkg-reconfigure --frontend noninteractive tzdata >>$LOG 2>&1
-sed -i '/^#NTP=/c\NTP=time.nist.gov' /etc/systemd/timesyncd.conf >>$LOG 2>&1
-systemctl restart systemd-timesyncd >>$LOG 2>&1
-ntpdate -u time.nist.gov >>$LOG 2>&1
-
-INFO="Schedule Journal Log Cleanup" ; DisplayInfo
-(crontab -l 2>> $LOG ; echo "@daily journalctl --vacuum-time=30d --vacuum-size=1G" )| crontab - >>$LOG 2>&1
-
-
-function create_swap() {
-    # Check for and create swap file if necessary
-    # this is an alternative that will disable swap, and create a new one at the size you like
-    # sudo swapoff -a && sudo dd if=/dev/zero of=/swapfile bs=1M count=6144 MB && sudo mkswap /swapfile && sudo swapon /swapfile
-    echo -e "------------------------------------------------- " | tee -a "$LOGFILE"
-    echo -e " $(date +%m.%d.%Y_%H:%M:%S) : CHECK FOR AND CREATE SWAP " | tee -a "$LOGFILE"
-    echo -e "------------------------------------------------- \n" | tee -a "$LOGFILE"
-
-    # Check for swap file - if none, create one
-    if free | awk '/^Swap:/ {exit !$2}'; then
-        echo -e "---------------------------------------------------- " | tee -a "$LOGFILE"
-        echo -e " $(date +%m.%d.%Y_%H:%M:%S) : Swap exists- No changes made " | tee -a "$LOGFILE"
-        echo -e "---------------------------------------------------- \n"  | tee -a "$LOGFILE"
-        sleep 2
-    else
-        # set swap to twice the physical RAM but not less than 2GB
-        PHYSRAM=$(grep MemTotal /proc/meminfo | awk '{print int($2 / 1024 / 1024 + 0.5)}')
-        let "SWAPSIZE=2*$PHYSRAM"
-		(($SWAPSIZE <= 2)) && SWAPSIZE=2
-        (($SWAPSIZE > 2 && $SWAPSIZE <= 8)) && SWAPSIZE=$PHYSRAM
-		(($SWAPSIZE > 8 && $SWAPSIZE <= 64)) && SWAPSIZE=0.5*$PHYSRAM
-        (($SWAPSIZE > 64)) && SWAPSIZE=32
-
-        fallocate -l ${SWAPSIZE}G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && cp /etc/fstab /etc/fstab.bak && echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
-        echo -e "-------------------------------------------------- " | tee -a "$LOGFILE"
-        echo -e " $(date +%m.%d.%Y_%H:%M:%S) : SWAP CREATED SUCCESSFULLY " | tee -a "$LOGFILE"
-        echo -e "--> Thanks @Cryptotron for supplying swap code <-- "
-        echo -e "-------------------------------------------------- \n" | tee -a "$LOGFILE"
-        sleep 2
-    fi
-}
-
-function ksplice_install() {
-
-    # This KSplice install script only works for Ubuntu at the moment
-    if [[ -r /etc/os-release ]]; then
-        . /etc/os-release
-        if [[ "${ID}" != "ubuntu" ]] ; then
-            echo -e "This KSplice install script only works for Ubuntu at the moment, skipping.\n"
-        else 
-
-    # -------> I still need to install an error check after installing Ksplice to make sure \
-        #          the install completed before moving on the configuration
-
-    # prompt users on whether to install Oracle ksplice or not
-    # install created using https://tinyurl.com/y9klkx2j and https://tinyurl.com/y8fr4duq
-    # Official page: https://ksplice.oracle.com/uptrack/guide
-    figlet Ksplice Uptrack | tee -a "$LOGFILE"
-    echo -e "---------------------------------------------- " | tee -a "$LOGFILE"
-    echo -e " $(date +%m.%d.%Y_%H:%M:%S) : INSTALL ORACLE KSPLICE " | tee -a "$LOGFILE"
-    echo -e "---------------------------------------------- \n" | tee -a "$LOGFILE"
-    echo -e " Normally, kernel updates in Linux require a system reboot. Ksplice"
-    echo -e " Uptrack installs these patches in memory for Ubuntu and Fedora"
-    echo -e " Linux so reboots are not needed. It is free for non-commercial use."
-    echo -e " To minimize server downtime, this is a good thing to install.\n"
-    
-        echo -e
-            while :; do
-            echo -e "\n"
-            read -n 1 -s -r -p " Would you like to install Oracle Ksplice Uptrack now? y/n  " KSPLICE
-            if [[ ${KSPLICE,,} == "y" || ${KSPLICE,,} == "Y" || ${KSPLICE,,} == "N" || ${KSPLICE,,} == "n" ]]
-            then
-                break
-            fi
-        done
-
-        if [ "${KSPLICE,,}" = "Y" ] || [ "${KSPLICE,,}" = "y" ]
-        then
-        # install ksplice uptrack
-        echo -e "--------------------------------------------------- " | tee -a "$LOGFILE"
-        echo -e " $(date +%m.%d.%Y_%H:%M:%S) : INSTALLING KSPLICE PACKAGES " | tee -a "$LOGFILE"
-        echo -e "--------------------------------------------------- " | tee -a "$LOGFILE"
-        echo ' # apt -qqy -o=Dpkg::Use-Pty=0 -o=Acquire::ForceIPv4=true install ' | tee -a "$LOGFILE"
-        echo '   libgtk2-perl consolekit iproute libck-connector0 libcroco3 libglade2-0 ' | tee -a "$LOGFILE"
-        echo '   libpam-ck-connector librsvg2-2 librsvg2-common python-cairo python-gtk2 ' | tee -a "$LOGFILE"
-        echo '   python-dbus python-gi python-glade2 python-gobject-2 python-pycurl ' | tee -a "$LOGFILE"
-        echo '   python-yaml dbus-x11 python-six python3-yaml ca-certificates' | tee -a "$LOGFILE"
-        echo -e "--------------------------------------------------- " | tee -a "$LOGFILE"
-        apt -qqy -o=Dpkg::Use-Pty=0 -o=Acquire::ForceIPv4=true install \
-            libgtk2-perl consolekit iproute libck-connector0 libcroco3 libglade2-0 \
-            libpam-ck-connector librsvg2-2 librsvg2-common python-cairo python-gtk2 \
-            python-dbus python-gi python-glade2 python-gobject-2 python-pycurl \
-            python-yaml dbus-x11 python-six python3-yaml ca-certificates | tee -a "$LOGFILE"
-        echo -e "---------------------------------------------------- " | tee -a "$LOGFILE"
-        echo -e " $(date +%m.%d.%Y_%H:%M:%S) : KSPLICE PACKAGES INSTALLED" | tee -a "$LOGFILE"
-        echo -e "---------------------------------------------------- " | tee -a "$LOGFILE"
-        echo -e " --> Download & install Ksplice package from Oracle " | tee -a "$LOGFILE"
-        echo -e "---------------------------------------------------- " | tee -a "$LOGFILE"
-		#TODO add variables for ubuntu versions
-		
-        wget -o /var/log/ksplicew1.log https://ksplice.oracle.com/uptrack/dist/$VERSION_CODENAME/uptrack.deb
-        dpkg --log "$LOGFILE" -i ksplice-uptrack.deb
-        if [ -e /etc/uptrack/uptrack.conf ]
-        then
-            echo -e "---------------------------------------------------- " | tee -a "$LOGFILE"
-            echo -e " $(date +%m.%d.%Y_%H:%M:%S) : KSPLICE UPTRACK INSTALLED" | tee -a "$LOGFILE"
-            echo -e "---------------------------------------------------- " | tee -a "$LOGFILE"
-            echo -e " ** Enabling autoinstall & correcting permissions ** " | tee -a "$LOGFILE"
-            sed -i "s/autoinstall = no/autoinstall = yes/" /etc/uptrack/uptrack.conf
-            chmod 755 /etc/cron.d/uptrack
-            echo -e "---------------------------------------------------- " | tee -a "$LOGFILE"
-            echo -e " ** Activate & install Ksplice patches & updates ** " | tee -a "$LOGFILE"
-            echo -e "---------------------------------------------------- " | tee -a "$LOGFILE"
-            cat $LOGFILE /var/log/ksplicew1.log > /var/log/join.log
-            cat /var/log/join.log > $LOGFILE
-            rm /var/log/ksplicew1.log
-            rm /var/log/join.log
-            uptrack-upgrade -y | tee -a "$LOGFILE"
-            echo -e "------------------------------------------------- " | tee -a "$LOGFILE"
-            echo -e " $(date +%m.%d.%Y_%H:%M:%S) : KSPLICE UPDATES INSTALLED" | tee -a "$LOGFILE"
-            echo -e "------------------------------------------------- \n" | tee -a "$LOGFILE"
-            sleep 1	; #  dramatic pause
-            clear
-            echo -e "------------------------------------------------- " | tee -a "$LOGFILE"
-            echo " $(date +%m.%d.%Y_%H:%M:%S) : SUCCESS : Ksplice Enabled" | tee -a "$LOGFILE"
-            echo -e "------------------------------------------------- \n" | tee -a "$LOGFILE"
-        else
-            clear
-            echo -e "-------------------------------------------------------- " | tee -a "$LOGFILE"
-            echo " $(date +%m.%d.%Y_%H:%M:%S) : FAIL : Ksplice was not Installed" | tee -a "$LOGFILE"
-            echo -e "-------------------------------------------------------- \n" | tee -a "$LOGFILE"
-        fi
-    else :
-        clear
-        echo -e "---------------------------------------------------- " | tee -a "$LOGFILE"
-        echo -e "     ** User elected not to install Ksplice ** " | tee -a "$LOGFILE"
-        echo -e "---------------------------------------------------- \n" | tee -a "$LOGFILE"
-    fi
-
-        fi
-    else
-        # no, thats not ok!
-        echo -e "This script only supports Ubuntu, skipping.\n"
-    fi
-}
-
-
-if [[ $LOGROTATE == 'y' ]]; then
-	setup_step_start "${STEP_TEXT[15]}"
-	{
-		 # Check if we've installed already
-    	if [[ $(dpkg --get-selections | grep logrotate) ]] ; then
-        	file_log "Unattended Upgrades is already installed. Skipping this step..."
-        	update_step_status "${STEP_TEXT[15]}" 0
-    	else
-        	file_log "Installing and scheduling Unattended Upgrades"
-        	apt -y install logrotate >>$LOG 2>&1
-			cp /etc/logrotate.conf /etc/logrotate.${BACKUP_EXTENSION}
-			cat > /etc/logrotate.conf <<EOF
-			# see "man logrotate" for details;
-			# rotate log files daily;
-			daily;
-			# keep 7 days worth of backlogs;
-			rotate 7;
-			# delete any logs older than 30 days;
-			maxage 30;
-			EOF
-			set_exit_code $?
-    	fi
-	} 2>> "$LOGFILE" >&2
-
-	setup_step_end "${STEP_TEXT[15]}"
-	if [[ $exit_code -gt 0 ]]; then
-		# TODO - Fix the reversion
-    	#revert_schedule_updates
-		echo "Reversion is currently broken.  Please roll back Logrotate Manually."
-	fi
-fi
