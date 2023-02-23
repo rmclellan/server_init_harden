@@ -939,7 +939,7 @@ fi
 setup_step_start "${STEP_TEXT[1]}"
 {
     SSH_DIR=/home/"$NORM_USER_NAME"/.ssh
-    if [[! -d $SSH_DIR ]]; then
+    if [[ ! -d $SSH_DIR ]]; then
         file_log "Creating SSH directory - $SSH_DIR"
         mkdir -p "$SSH_DIR"
         set_exit_code $?
